@@ -1,38 +1,163 @@
-.App {
-  text-align: center;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+body {
+  font-family: 'Inter', sans-serif;
+  background: #f0f2f5;
+  color: #1a1a2e;
+  -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
+/* ── Shared Auth Layout ── */
+.auth-container {
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(200, 210, 230, 0.3) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(210, 215, 235, 0.25) 0%, transparent 55%),
+    #eef0f5;
 }
 
-.App-link {
-  color: #61dafb;
+/* ── Shared Card ── */
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 44px 40px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.auth-card h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin-bottom: 6px;
+}
+
+/* ── Shared Form Elements ── */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.form-group input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  color: #1a1a2e;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.form-group input::placeholder {
+  color: #c0c4d0;
+}
+
+.form-group input:focus {
+  border-color: rgba(150, 160, 190, 0.6);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.04),
+    0 0 0 3px rgba(160, 170, 200, 0.15);
+}
+
+/* ── Shared Button ── */
+button[type="submit"] {
+  width: 100%;
+  background: #1a1a2e;
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 13px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  margin-top: 6px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(26, 26, 46, 0.25);
+}
+
+button[type="submit"]:hover {
+  background: #2d2d50;
+  box-shadow: 0 4px 16px rgba(26, 26, 46, 0.3);
+}
+
+button[type="submit"]:active {
+  transform: scale(0.99);
+}
+
+button[type="submit"]:disabled {
+  background: #c4c6d4;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Shared Error ── */
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 235, 235, 0.8);
+  border: 1px solid rgba(220, 100, 100, 0.2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #c0392b;
+  margin-bottom: 18px;
+  backdrop-filter: blur(8px);
+}
+
+/* ── Shared Footer Link ── */
+.auth-footer {
+  text-align: center;
+  margin-top: 22px;
+  font-size: 13px;
+  color: #9a9db0;
+}
+
+.auth-footer a {
+  color: #1a1a2e;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(26, 26, 46, 0.2);
+  padding-bottom: 1px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.auth-footer a:hover {
+  color: #4a4a7a;
+  border-color: rgba(74, 74, 122, 0.4);
 }
