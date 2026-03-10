@@ -1,0 +1,219 @@
+/* Shared Page Styling - Simple White Glassy Look */
+
+.page-container {
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(200, 210, 230, 0.3) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(210, 215, 235, 0.25) 0%, transparent 55%),
+    #eef0f5;
+}
+
+.page-wrapper {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.page-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+  margin-bottom: 2rem;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.page-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.page-header p {
+  color: #9a9db0;
+  font-size: 1.1rem;
+  margin: 0.5rem 0 0 0;
+  line-height: 1.5;
+}
+
+.page-content {
+  color: #1a1a2e;
+  line-height: 1.6;
+}
+
+.page-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 0 0 1rem 0;
+  letter-spacing: -0.01em;
+}
+
+.page-content h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 1.5rem 0 0.5rem 0;
+  letter-spacing: -0.01em;
+}
+
+.page-content p {
+  font-size: 1rem;
+  color: #4a5568;
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+/* Role-specific content sections */
+.role-specific-content {
+  background: rgba(240, 242, 248, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.role-specific-content h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1a1a2e;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* User details/info sections */
+.user-details,
+.account-info {
+  background: rgba(240, 242, 248, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.user-details h2,
+.account-info h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.user-details p,
+.account-info p {
+  font-size: 0.95rem;
+  color: #4a5568;
+  margin: 0.5rem 0;
+  line-height: 1.5;
+}
+
+/* Role text styling */
+.role-text {
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 0.25rem 0.6rem;
+  border-radius: 1rem;
+  font-size: 0.85rem;
+}
+
+.role-student {
+  color: #27ae60;
+  background: rgba(39, 174, 96, 0.1);
+  border: 1px solid rgba(39, 174, 96, 0.2);
+}
+
+.role-teacher {
+  color: #e67e22;
+  background: rgba(230, 126, 34, 0.1);
+  border: 1px solid rgba(230, 126, 34, 0.2);
+}
+
+.role-admin {
+  color: #9b59b6;
+  background: rgba(155, 89, 182, 0.1);
+  border: 1px solid rgba(155, 89, 182, 0.2);
+}
+
+/* Admin tools grid */
+.admin-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.admin-section,
+.grading-section {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-section:hover,
+.grading-section:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.admin-section h4,
+.grading-section h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a2e;
+  margin: 0 0 0.5rem 0;
+}
+
+.admin-section p,
+.grading-section p {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Grading tools specific */
+.grading-tools {
+  margin-top: 1rem;
+}
+
+.grading-tools .grading-section {
+  margin-bottom: 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 1rem 0.5rem;
+  }
+
+  .page-card {
+    padding: 1.5rem;
+    border-radius: 16px;
+  }
+
+  .page-header h1 {
+    font-size: 2rem;
+  }
+
+  .admin-tools {
+    grid-template-columns: 1fr;
+  }
+}
