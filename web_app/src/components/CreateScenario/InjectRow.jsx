@@ -31,7 +31,7 @@ export default function InjectRow({ inject, index, onUpdate, onRemove }) {
                 <select className="cs-input" value={inject.release_type}
                     onChange={(e) => onUpdate({ ...inject, release_type: e.target.value })}>
                     <option value="random_in_phase">Random within phase</option>
-                    <option value="guaranteed">Guaranteed at time</option>
+                    <option value="guaranteed_in_phase">Guaranteed at time</option>
                 </select>
             </div>
 
@@ -52,7 +52,7 @@ export default function InjectRow({ inject, index, onUpdate, onRemove }) {
                 </div>
             )}
 
-            {inject.release_type === "guaranteed" && (
+            {inject.release_type === "guaranteed_in_phase" && (
                 <div className="cs-field">
                     <label className="cs-label">Release at (minutes)</label>
                     <input className="cs-input" type="number" min={0}

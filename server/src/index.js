@@ -31,7 +31,8 @@ app.use('/api/classes', classesRoutes);
 const scenariosRoutes = require('./routes/scenarios');
 app.use('/api/scenarios', scenariosRoutes);
 
-app.use("/api/uploads", require("./routes/uploads"));
+const uploadsRoutes = require('./routes/uploads');
+app.use('/api/uploads', uploadsRoutes);
 
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { authenticateToken } = require('../middleware/auth');
+const fs = require('fs');
+const path = require('path');
 
 //Teacher reutrns all scenarios
 //Student returns only published scenarios for classes they are enrolled in
@@ -49,13 +51,13 @@ router.get('/', authenticateToken, async (req, res) => {
                      COUNT(a.id)::int AS attempt_count
                  FROM scenarios s
                  JOIN scenario_classes sc ON sc.scenario_id = s.id
-                 JOIN classes          c  ON c.id  = s.class_id
+                 JOIN classes c ON c.id = sc.class_id
                  JOIN class_enrolments ce ON ce.class_id   = c.id
                                         AND ce.student_id  = $1
                  LEFT JOIN attempts    a  ON a.scenario_id = s.id
                                         AND a.student_id   = $1
                  WHERE s.is_published = TRUE
-                 GROUP BY s.id, c.name
+                 GROUP BY s.id
                  ORDER BY s.created_at DESC`,
                 [userId],
             );
@@ -110,6 +112,7 @@ router.post('/', authenticateToken, async (req, res) => {
         description,
         difficulty,
         estimated_time_minutes,
+        class_ids = [],
         phases = [],
         injects =[],
         objectives = [],
@@ -140,6 +143,9 @@ router.post('/', authenticateToken, async (req, res) => {
             ]
         );
         const scenarioId = scenarioResult.rows[0].id;
+
+        const scenarioDir = path.join(__dirname, "../../uploads/scenarios", String(scenarioId));
+        await fs.promises.mkdir(scenarioDir, { recursive: true });
 
         // Associate with Classes
         for (const classId of class_ids) {
@@ -173,29 +179,53 @@ router.post('/', authenticateToken, async (req, res) => {
             );
             phaseIdMap[phase._id] = phaseRes.rows[0].id;
         }
+
+        const fileMoves = []; // track file moves to perform after DB inserts
  
+        console.log("Injects received:", injects);
+
         // Insert injects
         // injects have _phaseId (temp) or null for free-roaming
         for (const inject of injects) {
+
+            const guaranteedMinutes = inject.guaranteed_release_minutes !== ""
+                ? parseInt(inject.guaranteed_release_minutes)
+                : null;
+
+            let newFilePath = null;
+
+            if (inject.file_path) {
+
+                const filename = path.basename(inject.file_path);
+                const oldPath = path.join(__dirname, "../../", inject.file_path);
+                const newPath = path.join(scenarioDir, filename);
+
+                newFilePath = `uploads/scenarios/${scenarioId}/${filename}`;
+
+                fileMoves.push({
+                    oldPath,
+                    newPath,
+                });
+            }
+
             const realPhaseId = inject._phaseId ? (phaseIdMap[inject._phaseId] || null) : null;
- 
+
             await client.query(
                 `INSERT INTO injects
-                     (phase_id, title, description, file_type,
-                      release_type, min_delay_minutes, max_delay_minutes,
-                      guaranteed_release_minutes, notify_student)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    (phase_id, title, description, file_type, file_path,
+                    release_type, min_delay_minutes, max_delay_minutes,
+                    guaranteed_release_minutes, notify_student)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
                 [
                     realPhaseId,
                     inject.title.trim(),
                     inject.description || null,
-                    inject.file_type   || null,
+                    inject.file_type || null,
+                    newFilePath,
                     inject.release_type,
-                    inject.min_delay_minutes        ?? 0,
-                    inject.max_delay_minutes        ?? 10,
-                    inject.guaranteed_release_minutes != null
-                        ? inject.guaranteed_release_minutes
-                        : null,
+                    inject.min_delay_minutes ?? 0,
+                    inject.max_delay_minutes ?? 10,
+                    guaranteedMinutes,
                     inject.notify_student !== false,
                 ]
             );
@@ -243,6 +273,12 @@ router.post('/', authenticateToken, async (req, res) => {
         }
  
         await client.query('COMMIT');
+
+        //MOVE FILES after successful DB transaction
+        for (const move of fileMoves) {
+            await fs.promises.rename(move.oldPath, move.newPath);
+        }
+
         res.status(201).json({ id: scenarioId, message: 'Scenario created successfully' });
  
     } catch (err) {
