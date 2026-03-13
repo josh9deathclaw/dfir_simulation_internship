@@ -1,9 +1,11 @@
 import Dashboard from "./pages/Dashboard/Dashboard";
 import Scenarios from "./pages/Scenarios/Scenarios";
+import CreateScenario from "./pages/CreateScenario/CreateScenario";
 import Results from "./pages/Results/Results";
 import Grading from "./pages/Grading/Grading";
 import Account from "./pages/Account/Account";
 import AdminPanel from "./pages/AdminPanel/AdminPanel";
+import Classes from "./pages/Classes/Classes";
 
 // Define all possible routes with their role permissions
 export const routes = [
@@ -14,10 +16,22 @@ export const routes = [
     title: "Dashboard"
   },
   {
+    path: "/classes",
+    component: Classes,
+    roles: ["teacher", "admin"],
+    title: "Classes"
+  },
+  {
     path: "/scenarios",
     component: Scenarios,
     roles: ["student", "teacher", "admin"],
     title: "Scenarios"
+  },
+  {
+    path: "/create-scenario",
+    component: CreateScenario,
+    roles: ["teacher", "admin"],
+    title: "Create Scenario"
   },
   {
     path: "/results",
@@ -51,42 +65,42 @@ export const navigationTabs = [
     key: "dashboard",
     path: "/dashboard",
     label: "Dashboard",
-    icon: "📊",
     roles: ["student", "teacher", "admin"]
+  },
+  {
+    key: "classes",
+    path: "/classes",
+    label: "Classes",
+    roles: ["teacher", "admin"]
   },
   {
     key: "scenarios",
     path: "/scenarios",
     label: "Scenarios",
-    icon: "🎯",
     roles: ["student", "teacher", "admin"]
   },
   {
     key: "results",
     path: "/results",
     label: "Results",
-    icon: "📈",
     roles: ["student", "admin"]
   },
   {
     key: "grading",
     path: "/grading",
     label: "Grading",
-    icon: "📝",
     roles: ["teacher", "admin"]
   },
   {
     key: "account",
     path: "/account",
     label: "Account",
-    icon: "👤",
     roles: ["student", "teacher", "admin"]
   },
   {
     key: "admin",
     path: "/admin",
     label: "Admin Panel",
-    icon: "⚙️",
     roles: ["admin"]
   }
 ];

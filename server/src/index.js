@@ -25,6 +25,14 @@ app.get('/api/health', async (req, res) => {
 const authRoutes = require('./routes/auth');
 app.use('/api/auth', authRoutes);
 
+const classesRoutes = require('./routes/classes');
+app.use('/api/classes', classesRoutes);
+
+const scenariosRoutes = require('./routes/scenarios');
+app.use('/api/scenarios', scenariosRoutes);
+
+app.use("/api/uploads", require("./routes/uploads"));
+
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
