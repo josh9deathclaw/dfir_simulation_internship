@@ -139,6 +139,5 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 # Ignore Upload Files
-/uploads
-/uploads/*
-/server/uploads/
+/server/uploads/temp/*
+/server/uploads/scenarios/*
