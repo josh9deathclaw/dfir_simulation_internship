@@ -1,0 +1,32 @@
+$kind: http-request
+name: List Classes
+method: GET
+url: '{{base_url}}/api/classes'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response is an array", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.be.an("array");
+      });
+
+      pm.test("Classes have required properties", function () {
+          const jsonData = pm.response.json();
+          if (jsonData.length > 0) {
+              pm.expect(jsonData[0]).to.have.property("id");
+              pm.expect(jsonData[0]).to.have.property("name");
+          }
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

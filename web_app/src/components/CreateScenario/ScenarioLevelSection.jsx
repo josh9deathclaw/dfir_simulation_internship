@@ -61,7 +61,7 @@ export default function ScenarioLevelSection({ data, onChange }) {
             _id: Math.random().toString(36).slice(2, 10),
             question_text: "",
             blocks_progression: false,
-            question_type: "end_scenario_question",
+            question_type: "end_of_scenario",
         };
         onChange({ ...data, questions: [...data.questions, newQuestion] });
     };

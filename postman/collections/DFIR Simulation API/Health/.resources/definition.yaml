@@ -1,0 +1,4 @@
+$kind: collection
+name: Health
+description: Health check and root endpoints for server status verification.
+order: 1000

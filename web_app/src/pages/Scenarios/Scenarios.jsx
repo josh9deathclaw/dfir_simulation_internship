@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getUser, getToken } from "../../utils/auth";
@@ -271,12 +271,38 @@ function StudentsTab({ scenarioId, accentColor }) {
 }
 
 // ─── Scenario Detail Modal ────────────────────────────────────────────────────
-function ScenarioModal({ scenario, userId, userRole, onClose, onEdit }) {
+function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishToggle, navigate }) {
     const [activeTab, setActiveTab] = useState("overview");
+    const [publishing, setPublishing] = useState(false);
+    const token = getToken();
     const isOwner     = scenario.created_by === userId;
     const diff        = DIFFICULTY_CONFIG[scenario.difficulty];
     const accentColor = scenario.accentColor;
     const time        = formatTime(scenario.estimated_time_minutes);
+
+    const handlePublishToggle = async () => {
+        setPublishing(true);
+        try {
+            const res = await fetch(
+                `${process.env.REACT_APP_API_URL}/api/scenarios/${scenario.id}/publish`,
+                { 
+                    method: "PATCH", 
+                    headers: { 
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ is_published: true })
+                }
+            );
+            if (!res.ok) throw new Error();
+            const { is_published } = await res.json();
+            onPublishToggle(scenario.id, is_published);
+        } catch {
+            // fail silently — could add an error state here later
+        } finally {
+            setPublishing(false);
+        }
+    };
 
     const tabs = userRole === "teacher" && isOwner
         ? ["overview", "students", "analytics"]
@@ -366,8 +392,10 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit }) {
                                     <button
                                         className="sc-btn sc-btn--primary"
                                         style={{ background: accentColor, boxShadow: `0 4px 20px ${accentColor}44` }}
+                                        onClick={() => navigate(`/simulatorpage/${scenario.id}`)}
                                     >
                                         Start Scenario →
+
                                     </button>
                                 )}
                                 {userRole === "teacher" && isOwner && (
@@ -379,9 +407,14 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit }) {
                                         >
                                             Edit Scenario
                                         </button>
-                                        <button className="sc-btn sc-btn--ghost">
-                                            {scenario.is_published ? "Unpublish" : "Publish"}
-                                        </button>
+                                        {!scenario.is_published && (
+                                            <button className="sc-btn sc-btn--ghost" 
+                                                onClick={handlePublishToggle}
+                                                disabled={publishing}   
+                                            >
+                                                {publishing ? "Publishing…" : "Publish"}
+                                            </button>
+                                        )}
                                     </>
                                 )}
                             </div>
@@ -424,8 +457,18 @@ export default function Scenarios() {
     const [selected,   setSelected]   = useState(null);
     const [filter,     setFilter]     = useState("all");
     const [showJoin,   setShowJoin]   = useState(false);
+    const [selectedClass, setSelectedClass] = useState("all");
+    const [classes, setClasses] = useState([]);
 
     const FILTERS = ["all", "easy", "medium", "hard"];
+
+    const uniqueClasses = useMemo(() => {
+        if (userRole === "teacher") {
+            return [...new Set(classes.map(c => c.name).filter(Boolean))];
+        }
+        const names = scenarios.flatMap(s => s.class_names || []);
+        return [...new Set(names)];
+    }, [classes, scenarios, userRole]);
 
     const fetchScenarios = useCallback(() => {
         setLoading(true);
@@ -440,17 +483,45 @@ export default function Scenarios() {
             .catch((err) => { setError(err.message); setLoading(false); });
     }, [token]);
 
-    useEffect(() => { fetchScenarios(); }, [fetchScenarios]);
+    const fetchClasses = useCallback(() => {
+    fetch(`${process.env.REACT_APP_API_URL}/api/classes`, {
+        headers: { Authorization: `Bearer ${token}` },
+    })
+        .then((r) => r.json())
+        .then((data) => { setClasses(data); })
+        .catch(() => {});
+}, [token]);
+
+    useEffect(() => { 
+        fetchScenarios(); 
+        fetchClasses();
+    }, [fetchScenarios, fetchClasses]);
 
     const visible = scenarios.filter(
         (s) => filter === "all" || s.difficulty === filter
     );
 
-    const myScenarios    = userRole === "teacher" ? visible.filter((s) => s.created_by === userId) : [];
-    const otherScenarios = userRole === "teacher" ? visible.filter((s) => s.created_by !== userId) : visible;
+    const myScenarios        = userRole === "teacher" ? visible.filter((s) => s.created_by === userId) : [];
+    const allScenariosSection = visible; // teachers see everything, students see their enrolled+published
+    // For teachers "all scenarios" = everything (including their own).
+    // For students it's just their visible scenarios.
+
+    const classFiltered = allScenariosSection.filter(
+        (s) => selectedClass === "all" || (s.class_names || []).includes(selectedClass)
+    );
 
     const handleEdit = (scenario) => {
         console.log("Navigate to editor for:", scenario.id);
+    };
+
+    const handlePublishToggle = (scenarioId, newPublishedState) => {
+        // Update local state so the card and modal both reflect the change immediately
+        setScenarios((prev) =>
+            prev.map((s) => s.id === scenarioId ? { ...s, is_published: newPublishedState } : s)
+        );
+        setSelected((prev) =>
+            prev?.id === scenarioId ? { ...prev, is_published: newPublishedState } : prev
+        );
     };
 
     return (
@@ -479,6 +550,19 @@ export default function Scenarios() {
                                 </button>
                             ))}
                         </div>
+
+                        {uniqueClasses.length > 0 && (
+                            <select 
+                                value={selectedClass} 
+                                onChange={(e) => setSelectedClass(e.target.value)} 
+                                className="sc-class-select"
+                            >
+                                <option value="all">All Classes</option>
+                                {uniqueClasses.map((cls) => (
+                                    <option key={cls} value={cls}>{cls}</option>
+                                ))}
+                            </select>
+                        )}
 
                         {/* Teacher: create button */}
                         {userRole === "teacher" && (
@@ -521,17 +605,19 @@ export default function Scenarios() {
                         <section className="sc-section sc-section--delay2">
                             <SectionLabel
                                 label={userRole === "teacher" ? "All Scenarios" : "Your Scenarios"}
-                                count={otherScenarios.length}
+                                count={classFiltered.length}
                             />
-                            {otherScenarios.length > 0 ? (
+                            {classFiltered.length > 0 ? (
                                 <div className="sc-grid">
-                                    {otherScenarios.map((s) => (
+                                    {classFiltered.map((s) => (
                                         <ScenarioCard key={s.id} scenario={s} userId={userId} userRole={userRole} onClick={setSelected} />
                                     ))}
                                 </div>
                             ) : (
-                                /* ── Student empty state with join prompt ── */
-                                userRole === "student" ? (
+                                /* ── Empty states ── */
+                                selectedClass !== "all" ? (
+                                    <div className="sc-placeholder">No scenarios in this class.</div>
+                                ) : userRole === "student" ? (
                                     <div className="sc-student-empty">
                                         <div className="sc-student-empty__icon">⬡</div>
                                         <div className="sc-student-empty__title">No scenarios yet</div>
@@ -563,6 +649,8 @@ export default function Scenarios() {
                     userRole={userRole}
                     onClose={() => setSelected(null)}
                     onEdit={handleEdit}
+                    onPublishToggle={handlePublishToggle}
+                    navigate={navigate}
                 />
             )}
 
@@ -572,6 +660,7 @@ export default function Scenarios() {
                     onJoined={() => {
                         setShowJoin(false);
                         fetchScenarios(); // re-fetch so new scenarios appear
+                        fetchClasses(); // re-fetch classes to include the new one
                     }}
                 />
             )}

@@ -26,10 +26,10 @@ function ProtectedRoute({ children, requiredRoles }) {
   }
 
   // Check if user has access to current path
-  if (!hasAccessToPath(user.role, location.pathname)) {
+  //if (!hasAccessToPath(user.role, location.pathname)) {
     // User doesn't have access to this path, redirect to dashboard
-    return <Navigate to="/dashboard" replace />;
-  }
+    //return <Navigate to="/dashboard" replace />;
+ // }
 
   return children;
 }

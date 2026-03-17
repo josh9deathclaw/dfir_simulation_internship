@@ -6,6 +6,7 @@ import Grading from "./pages/Grading/Grading";
 import Account from "./pages/Account/Account";
 import AdminPanel from "./pages/AdminPanel/AdminPanel";
 import Classes from "./pages/Classes/Classes";
+import SimulatorPage from "./pages/SimulatorPage/SimulatorPage";
 
 // Define all possible routes with their role permissions
 export const routes = [
@@ -56,6 +57,12 @@ export const routes = [
     component: AdminPanel,
     roles: ["admin"],
     title: "Admin Panel"
+  },
+  {
+    path: "/simulatorpage/:scenarioId",
+    component: SimulatorPage,
+    roles: ["student", "teacher", "admin"],
+    title: "Scenario Simulator"
   }
 ];
 

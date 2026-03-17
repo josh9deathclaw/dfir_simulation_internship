@@ -1,0 +1,4 @@
+$kind: collection
+name: Classes
+description: Class management endpoints for teachers and students.
+order: 3000

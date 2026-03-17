@@ -1,0 +1,4 @@
+$kind: collection
+name: Uploads
+description: File upload endpoints for scenario artifacts.
+order: 5000

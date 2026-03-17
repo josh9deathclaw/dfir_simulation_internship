@@ -1,0 +1,47 @@
+$kind: http-request
+name: Create Class
+method: POST
+url: '{{base_url}}/api/classes'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+body:
+  type: json
+  content: |-
+    {
+      "name": "DFIR Fundamentals 101"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+
+      pm.test("Response contains class data", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("id");
+          pm.expect(jsonData).to.have.property("name");
+          pm.expect(jsonData).to.have.property("enrolment_code");
+      });
+
+      pm.test("Enrollment code is generated", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.enrolment_code).to.be.a("string");
+          pm.expect(jsonData.enrolment_code.length).to.be.greaterThan(0);
+      });
+
+      // Store class_id and enrollment_code for subsequent requests
+      if (pm.response.code === 201) {
+          const jsonData = pm.response.json();
+          pm.collectionVariables.set("class_id", jsonData.id);
+          pm.collectionVariables.set("enrollment_code", jsonData.enrolment_code);
+      }
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

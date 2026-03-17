@@ -1,0 +1,4 @@
+$kind: collection
+name: Scenarios
+description: DFIR scenario management endpoints for creating and managing simulation scenarios.
+order: 4000

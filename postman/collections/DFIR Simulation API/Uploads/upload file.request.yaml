@@ -1,0 +1,31 @@
+$kind: http-request
+name: Upload File
+method: POST
+url: '{{base_url}}/api/uploads'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+body:
+  type: formdata
+  content:
+    - key: file
+      type: file
+      src: ''
+      description: File to upload for scenario inject
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+
+      pm.test("Response contains file path", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("filePath");
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(5000);
+      });

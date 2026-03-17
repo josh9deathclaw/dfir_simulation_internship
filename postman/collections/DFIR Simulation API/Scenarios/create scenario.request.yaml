@@ -1,0 +1,69 @@
+$kind: http-request
+name: Create Scenario
+method: POST
+url: '{{base_url}}/api/scenarios'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+body:
+  type: json
+  content: |-
+    {
+      "title": "Ransomware Investigation",
+      "description": "Investigate a simulated ransomware attack on a corporate network",
+      "difficulty": "medium",
+      "classId": "{{class_id}}",
+      "phases": [
+        {
+          "title": "Initial Detection",
+          "description": "Identify the initial indicators of compromise",
+          "orderIndex": 1,
+          "unlockTimeMinutes": 0
+        },
+        {
+          "title": "Containment",
+          "description": "Contain the threat and prevent further spread",
+          "orderIndex": 2,
+          "unlockTimeMinutes": 30
+        }
+      ],
+      "objectives": [
+        {
+          "description": "Identify the initial infection vector"
+        },
+        {
+          "description": "Determine the scope of the compromise"
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+
+      pm.test("Response contains scenario data", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("id");
+          pm.expect(jsonData).to.have.property("title");
+      });
+
+      pm.test("Scenario has correct difficulty", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.difficulty).to.be.oneOf(["easy", "medium", "hard"]);
+      });
+
+      // Store scenario_id for subsequent requests
+      if (pm.response.code === 201) {
+          const jsonData = pm.response.json();
+          pm.collectionVariables.set("scenario_id", jsonData.id);
+      }
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(3000);
+      });

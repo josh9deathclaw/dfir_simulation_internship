@@ -1,0 +1,32 @@
+$kind: http-request
+name: Join Class
+method: POST
+url: '{{base_url}}/api/classes/join'
+order: 3000
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+body:
+  type: json
+  content: |-
+    {
+      "enrolmentCode": "{{enrollment_code}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+
+      pm.test("Response confirms enrollment", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("message");
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

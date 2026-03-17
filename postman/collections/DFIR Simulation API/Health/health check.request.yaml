@@ -1,0 +1,26 @@
+$kind: http-request
+name: Health Check
+method: GET
+url: '{{base_url}}/api/health'
+order: 1000
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response has status ok", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.status).to.eql("ok");
+      });
+
+      pm.test("Database is connected", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.db).to.eql("connected");
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

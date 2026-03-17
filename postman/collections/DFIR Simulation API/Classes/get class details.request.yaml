@@ -1,0 +1,31 @@
+$kind: http-request
+name: Get Class Details
+method: GET
+url: '{{base_url}}/api/classes/{{class_id}}'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response contains class details", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("id");
+          pm.expect(jsonData).to.have.property("name");
+          pm.expect(jsonData).to.have.property("students");
+      });
+
+      pm.test("Students is an array", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.students).to.be.an("array");
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

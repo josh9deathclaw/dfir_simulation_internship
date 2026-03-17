@@ -1,0 +1,40 @@
+$kind: http-request
+name: Enroll Student by Email
+method: POST
+url: '{{base_url}}/api/classes/{{class_id}}/students'
+order: 5000
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+body:
+  type: json
+  content: |-
+    {
+      "email": "student@example.com"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 201", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 201]);
+      });
+
+      pm.test("Response confirms enrollment", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("message");
+      });
+
+      // Store student_id if returned
+      if (pm.response.code === 200 || pm.response.code === 201) {
+          const jsonData = pm.response.json();
+          if (jsonData.student_id) {
+              pm.collectionVariables.set("student_id", jsonData.student_id);
+          }
+      }
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

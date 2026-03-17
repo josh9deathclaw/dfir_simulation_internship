@@ -1,0 +1,19 @@
+$kind: http-request
+name: Remove Student from Class
+method: DELETE
+url: '{{base_url}}/api/classes/{{class_id}}/students/{{student_id}}'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200 or 204", function () {
+          pm.expect(pm.response.code).to.be.oneOf([200, 204]);
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });

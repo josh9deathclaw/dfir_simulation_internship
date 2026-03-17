@@ -22,7 +22,7 @@ export default function QuestionRow({ question, index, onUpdate, onRemove }) {
                     <select className="cs-input" value={question.question_type}
                         onChange={(e) => onUpdate({ ...question, question_type: e.target.value })}>
                         <option value="phase_question">Phase Question</option>
-                        <option value="end_scenario_question">End-of-scenario</option>
+                        <option value="end_of_scenario">End-of-scenario</option>
                     </select>
                 </div>
                 <label className="cs-checkbox-row">

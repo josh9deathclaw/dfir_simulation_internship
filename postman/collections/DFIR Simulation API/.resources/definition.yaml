@@ -1,0 +1,35 @@
+$kind: collection
+name: DFIR Simulation API
+description: |-
+  API collection for the DFIR Simulation and Validation Environment.
+  
+  ## Base URL
+  Server runs on port 3001 by default (configurable via PORT env var).
+  
+  ## Authentication
+  Most endpoints require JWT Bearer token authentication.
+  - Register a user via POST /api/auth/register
+  - Login via POST /api/auth/login to get a token
+  - Include token in Authorization header: Bearer <token>
+  
+  ## Roles
+  - student: Can view published scenarios, join classes
+  - teacher: Can create classes, scenarios, manage students
+  - admin: Full access to all resources
+variables:
+  - key: base_url
+    value: 'http://localhost:3001'
+  - key: auth_token
+    value: ''
+  - key: user_email
+    value: 'test@example.com'
+  - key: user_password
+    value: 'password123'
+  - key: class_id
+    value: ''
+  - key: scenario_id
+    value: ''
+  - key: enrollment_code
+    value: ''
+  - key: student_id
+    value: ''

@@ -1,0 +1,42 @@
+$kind: http-request
+name: Register User
+method: POST
+url: '{{base_url}}/api/auth/register'
+order: 1000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "{{user_email}}",
+      "password": "{{user_password}}",
+      "role": "teacher"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+
+      pm.test("Response contains user data", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("id");
+          pm.expect(jsonData).to.have.property("email");
+          pm.expect(jsonData).to.have.property("role");
+      });
+
+      pm.test("Password is not returned", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.not.have.property("password");
+          pm.expect(jsonData).to.not.have.property("password_hash");
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(3000);
+      });

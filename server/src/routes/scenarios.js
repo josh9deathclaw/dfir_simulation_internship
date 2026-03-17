@@ -26,7 +26,7 @@ router.get('/', authenticateToken, async (req, res) => {
                      s.created_at,
                      s.estimated_time_minutes,
                      -- Aggregate class names since scenario can belong to many classes
-                     STRING_AGG(c.name, ', ' ORDER BY c.name) AS class_names,
+                     JSON_AGG(DISTINCT c.name) AS class_names,
                      COUNT(a.id)::int AS attempt_count
                  FROM scenarios s
                  LEFT JOIN scenario_classes sc ON sc.scenario_id = s.id
@@ -47,7 +47,7 @@ router.get('/', authenticateToken, async (req, res) => {
                      s.created_by,
                      s.created_at,
                      s.estimated_time_minutes,
-                     STRING_AGG(DISTINCT c.name, ', ' ORDER BY c.name) AS class_name,
+                     JSON_AGG(DISTINCT c.name) AS class_names,
                      COUNT(a.id)::int AS attempt_count
                  FROM scenarios s
                  JOIN scenario_classes sc ON sc.scenario_id = s.id
@@ -86,9 +86,8 @@ router.get('/:id/students', authenticateToken, async (req, res) => {
                  u.email
              FROM users u
              JOIN class_enrolments ce ON ce.student_id = u.id
-             JOIN classes          c  ON c.id = ce.class_id
-             JOIN scenarios        s  ON s.class_id = c.id
-             WHERE s.id = $1
+             JOIN scenario_classes sc ON sc.class_id = ce.class_id
+             WHERE sc.scenario_id = $1
              ORDER BY u.last_name, u.first_name`,
             [req.params.id],
         );
@@ -318,6 +317,106 @@ router.patch('/:id/publish', authenticateToken, async (req, res) => {
         res.json({ is_published: !current });
     } catch (err) {
         console.error('PATCH /api/scenarios/:id/publish error:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// Get scenario details for editing and for simulator page (includes phases, injects, objectives, questions)
+router.get('/:id/full', authenticateToken, async (req, res) => {
+    const {id: scenarioId} = req.params;
+    const {id: userId, role} = req.user;
+
+    try {
+
+        // Check if scenario exists and if user has access
+        const scenarioRes = await db.query(
+            `SELECT s.id, s.title, s.description, s.difficulty,
+                    s.estimated_time_minutes, s.is_published, s.created_by
+             FROM scenarios s
+             WHERE s.id = $1`,
+            [scenarioId]
+        );
+
+        if (scenarioRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Scenario not found' });
+        }
+
+        const scenario = scenarioRes.rows[0];
+
+        // Access check
+        if (role === 'student') {
+            // Student must be enrolled in a class this scenario is assigned to
+            const accessRes = await db.query(
+                `SELECT 1 FROM scenario_classes sc
+                 JOIN class_enrolments ce ON ce.class_id = sc.class_id
+                 WHERE sc.scenario_id = $1 AND ce.student_id = $2`,
+                [scenarioId, userId]
+            );
+            if (accessRes.rows.length === 0) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+        } else if (role === 'teacher') {
+            if (scenario.created_by !== userId) {
+                return res.status(403).json({ message: 'Forbidden' });
+            }
+        }
+
+        // Fetch Phases
+        const phasesRes = await db.query(
+            `SELECT id, title, description, order_index,
+                    duration_minutes, requires_completion
+             FROM phases
+             WHERE scenario_id = $1
+             ORDER BY order_index ASC`,
+            [scenarioId]
+        )
+
+        // Fetch Injects
+        const injectsRes = await db.query(
+            `SELECT id, phase_id, title, description, file_path, file_type,
+                    release_type, min_delay_minutes,
+                    max_delay_minutes, guaranteed_release_minutes, notify_student
+             FROM injects
+             WHERE phase_id IN (
+                 SELECT id FROM phases WHERE scenario_id = $1
+             )
+             OR phase_id IS NULL`,
+            [scenarioId]
+        );
+
+        // Fetch Objectives
+        const objectivesRes = await db.query(
+            `SELECT id, phase_id, description, objective_type, 
+            blocks_progression, order_index
+            FROM objectives
+            WHERE scenario_id = $1
+            ORDER BY order_index ASC`,
+            [scenarioId]
+        );
+
+        // Fetch Questions
+        const questionsRes = await db.query(
+            `SELECT id, phase_id, question_text, question_type,
+                    blocks_progression, order_index
+             FROM questions
+             WHERE phase_id IN (
+                 SELECT id FROM phases WHERE scenario_id = $1
+             )
+             ORDER BY order_index ASC`,
+            [scenarioId]
+        );
+
+        // Assemble and Return
+        res.json({
+            scenario,
+            phases:     phasesRes.rows,
+            injects:    injectsRes.rows,
+            objectives: objectivesRes.rows,
+            questions:  questionsRes.rows,
+        });
+
+    } catch (err) {
+        console.error('GET /api/scenarios/:id/full error:', err);
         res.status(500).json({ message: 'Internal server error' });
     }
 });

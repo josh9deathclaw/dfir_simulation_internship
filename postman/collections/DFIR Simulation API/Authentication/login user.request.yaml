@@ -1,0 +1,44 @@
+$kind: http-request
+name: Login User
+method: POST
+url: '{{base_url}}/api/auth/login'
+order: 2000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{user_email}}",
+      "password": "{{user_password}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response contains token", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("token");
+      });
+
+      pm.test("Token is a valid JWT format", function () {
+          const jsonData = pm.response.json();
+          const token = jsonData.token;
+          const parts = token.split(".");
+          pm.expect(parts.length).to.eql(3);
+      });
+
+      // Store token for subsequent requests
+      if (pm.response.code === 200) {
+          const jsonData = pm.response.json();
+          pm.collectionVariables.set("auth_token", jsonData.token);
+      }
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(3000);
+      });

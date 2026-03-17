@@ -1,0 +1,37 @@
+$kind: http-request
+name: Get Full Scenario
+method: GET
+url: '{{base_url}}/api/scenarios/{{scenario_id}}/full'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 200", function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test("Response contains full scenario details", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("id");
+          pm.expect(jsonData).to.have.property("title");
+          pm.expect(jsonData).to.have.property("phases");
+          pm.expect(jsonData).to.have.property("objectives");
+      });
+
+      pm.test("Phases is an array", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.phases).to.be.an("array");
+      });
+
+      pm.test("Objectives is an array", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData.objectives).to.be.an("array");
+      });
+
+      pm.test("Response time is acceptable", function () {
+          pm.expect(pm.response.responseTime).to.be.below(2000);
+      });
