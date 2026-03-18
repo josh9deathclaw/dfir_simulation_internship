@@ -35,7 +35,7 @@ const uploadsRoutes = require('./routes/uploads');
 app.use('/api/uploads', uploadsRoutes);
 
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 const attemptsRoutes    = require('./routes/attempts');
 const submissionsRoutes = require('./routes/submissions');

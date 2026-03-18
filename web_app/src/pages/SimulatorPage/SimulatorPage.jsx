@@ -34,6 +34,8 @@ function InjectCard({ inject, isNew }) {
     const displayName = inject.file_name || inject.file_path?.split("/").pop() || null;
 
     const handleRetrieve = () => {
+        console.log("[InjectCard] file_path:", inject.file_path);
+        console.log("[InjectCard] full URL:", `${process.env.REACT_APP_API_URL}/${inject.file_path}`);
         if (inject.file_path) {
             window.open(`${process.env.REACT_APP_API_URL}/${inject.file_path}`, "_blank");
         }
@@ -487,12 +489,17 @@ export default function SimulatorPage() {
     const [objCollapsed,    setObjCollapsed]    = useState(false);
     const [overlay,         setOverlay]         = useState(null);
     const [nextPhaseIdx,    setNextPhaseIdx]    = useState(null);
-    const feedRef = useRef(null);
+    const feedRef        = useRef(null);
+    // Track released inject IDs in a ref so the release-check effect doesn't
+    // need receivedInjects in its dependency array, preventing the race condition
+    // where an inject fires multiple times before alreadyReleased catches it.
+    const releasedIdsRef = useRef(new Set());
 
     // ── Derived values ─────────────────────────────────────────────────────────
     const currentPhase   = allPhases[phaseIndex];
     const phaseObjs      = currentPhase ? objectives.filter(o => o.phase_id === currentPhase.id) : [];
     const phaseQuestions = currentPhase ? allQuestions.filter(q => q.phase_id === currentPhase.id) : [];
+    const endQuestions   = allQuestions.filter(q => q.question_type === "end_of_scenario");
     const blockingLeft   = phaseObjs.filter(o => o.blocks_progression && !o.completed).length;
     const gatesTotal     = phaseObjs.filter(o => o.blocks_progression).length;
     const gatesDone      = gatesTotal - blockingLeft;
@@ -557,13 +564,28 @@ export default function SimulatorPage() {
     }, [scenarioId, token]);
 
     // ── Build inject release schedule when phase changes ───────────────────────
+    // Scenario-wide injects (phase_id === null) are only scheduled on phase 0.
+    // When the phase changes we reset the released-IDs ref but keep scenario-wide
+    // inject IDs in it so they don't fire again on later phases.
     useEffect(() => {
         if (!currentPhase) return;
         setPhaseElapsed(0);
 
-        const phaseInjects = allInjects.filter(
-            inj => inj.phase_id === currentPhase.id || inj.phase_id === null
+        // Keep scenario-wide inject IDs so they don't re-fire on phase change
+        const scenarioWideIds = new Set(
+            allInjects.filter(inj => inj.phase_id === null).map(inj => inj.id)
         );
+        // Preserve already-released scenario-wide IDs, clear phase-specific ones
+        const preserved = new Set(
+            [...releasedIdsRef.current].filter(id => scenarioWideIds.has(id))
+        );
+        releasedIdsRef.current = preserved;
+
+        const phaseInjects = allInjects.filter(inj => {
+            if (inj.phase_id === currentPhase.id) return true;
+            if (inj.phase_id === null && phaseIndex === 0) return true;
+            return false;
+        });
 
         const schedule = {};
         phaseInjects.forEach(inj => {
@@ -606,6 +628,8 @@ export default function SimulatorPage() {
     }, []);
 
     // ── Check inject releases each second ─────────────────────────────────────
+    // Uses releasedIdsRef instead of receivedInjects to avoid the race condition
+    // where the effect re-runs on every state update and fires duplicates.
     useEffect(() => {
         if (!currentPhase) return;
         const phaseInjects = allInjects.filter(
@@ -614,23 +638,28 @@ export default function SimulatorPage() {
         phaseInjects.forEach(inj => {
             const releaseAt = releaseSchedule[inj.id];
             if (releaseAt === undefined) return;
-            const alreadyReleased = receivedInjects.some(r => r.id === inj.id);
-            if (!alreadyReleased && phaseElapsed >= releaseAt) {
+            if (!releasedIdsRef.current.has(inj.id) && phaseElapsed >= releaseAt) {
+                releasedIdsRef.current.add(inj.id);
                 const stamped = { ...inj, receivedAt: formatTimestamp() };
                 setReceivedInjects(prev => [stamped, ...prev]);
                 setNewInjectId(inj.id);
                 setTimeout(() => setNewInjectId(null), 2000);
             }
         });
-    }, [phaseElapsed, currentPhase, releaseSchedule, receivedInjects, allInjects]);
+    }, [phaseElapsed, currentPhase, releaseSchedule, allInjects]);
 
     // ── End phase when timer hits 0 ────────────────────────────────────────────
+    // Triggers when:
+    //   - timer hits 0 and phase doesn't require completion, OR
+    //   - timer hits 0 and phase requires completion but all blocking objectives are done
     useEffect(() => {
-        if (timeLeft === 0 && currentPhase && !currentPhase.requires_completion) {
-            handlePhaseEnd();
+        if (timeLeft === 0 && currentPhase) {
+            if (!currentPhase.requires_completion || blockingLeft === 0) {
+                handlePhaseEnd();
+            }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [timeLeft]);
+    }, [timeLeft, blockingLeft]);
 
     // ── Toggle objective completion ────────────────────────────────────────────
     const handleToggleObjective = useCallback((objId) => {
@@ -681,9 +710,12 @@ export default function SimulatorPage() {
             setSubmitting(false);
         }
 
+        // Keep track of if it is the final phase so we know whether to show the transition overlay or the complete screen after submission.
+        const isFinalPhase = phaseIndex === allPhases.length - 1;
+
+
         if (isEndOfScenario) {
             // Mark the attempt as completed then show the complete screen.
-            // We fire-and-forget this PATCH — not critical if it fails.
             if (attemptId) {
                 fetch(`${process.env.REACT_APP_API_URL}/api/attempts/${attemptId}/complete`, {
                     method: "PATCH",
@@ -691,20 +723,35 @@ export default function SimulatorPage() {
                 }).catch(err => console.error("Failed to complete attempt:", err));
             }
             setOverlay("complete");
-        } else {
+
+        } else if (isFinalPhase){
+            if (endQuestions.length > 0) {
+                setOverlay("questions-end");
+            } else {
+                setOverlay("complete");
+            }
+            
+        } else{
             setOverlay("transition");
         }
-    }, [token, attemptId]);
+    }, [token, attemptId, phaseIndex, allPhases.length, endQuestions.length]);
 
     // ── Determine what to show at phase end ────────────────────────────────────
     const handlePhaseEnd = useCallback(() => {
+        // Check objectives with blocks_progression — if any are incomplete, show the warning.
+        if (currentPhase?.requires_completion && blockingLeft > 0) {
+            console.log("Cannot progress: objectives not completed");
+            return;
+        }
+        
         const nextIdx = phaseIndex + 1;
 
         if (nextIdx >= allPhases.length) {
             if (phaseQuestions.length > 0) {
+                setOverlay("questions"); 
+            } else if (endQuestions.length > 0) {
                 setOverlay("questions-end");
             } else {
-                // No questions — complete immediately and mark attempt done
                 if (attemptId) {
                     fetch(`${process.env.REACT_APP_API_URL}/api/attempts/${attemptId}/complete`, {
                         method: "PATCH",
@@ -722,7 +769,7 @@ export default function SimulatorPage() {
         } else {
             setOverlay("transition");
         }
-    }, [phaseIndex, allPhases.length, phaseQuestions.length, attemptId, token]);
+    }, [phaseIndex, allPhases.length, phaseQuestions.length, attemptId, token, blockingLeft, currentPhase, endQuestions.length]);
 
     // ── Advance to next phase ──────────────────────────────────────────────────
     const advancePhase = useCallback(() => {
@@ -854,7 +901,7 @@ export default function SimulatorPage() {
 
             {(overlay === "questions" || overlay === "questions-end") && (
                 <QuestionsModal
-                    questions={phaseQuestions}
+                    questions={overlay === "questions-end" ? endQuestions : phaseQuestions}
                     phaseName={currentPhase?.title}
                     isEndOfScenario={overlay === "questions-end"}
                     submitting={submitting}

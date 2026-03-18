@@ -20,8 +20,7 @@ export default function ObjectiveRow({ objective, index, onUpdate, onRemove }) {
                     <select className="cs-input" value={objective.objective_type}
                         onChange={(e) => onUpdate({ ...objective, objective_type: e.target.value })}>
                         <option value="main">Main</option>
-                        <option value="bonus">Bonus</option>
-                        <option value="optional">Optional</option>
+                        <option value="side">Side</option>
                     </select>
                 </div>
                 <label className="cs-checkbox-row">

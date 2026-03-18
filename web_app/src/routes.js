@@ -7,6 +7,7 @@ import Account from "./pages/Account/Account";
 import AdminPanel from "./pages/AdminPanel/AdminPanel";
 import Classes from "./pages/Classes/Classes";
 import SimulatorPage from "./pages/SimulatorPage/SimulatorPage";
+import EditScenario from "./pages/EditScenario/EditScenario";
 
 // Define all possible routes with their role permissions
 export const routes = [
@@ -63,7 +64,13 @@ export const routes = [
     component: SimulatorPage,
     roles: ["student", "teacher", "admin"],
     title: "Scenario Simulator"
-  }
+  },
+  {
+    path: "/edit-scenario/:scenarioId",
+    component: EditScenario,
+    roles: ["teacher", "admin"],
+    title: "Edit Scenario"
+  },
 ];
 
 // Define navigation tabs configuration

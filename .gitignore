@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # Ignore Upload Files
 /server/uploads/temp/*
 /server/uploads/scenarios/*
+
+# Postman environments (ignore secrets)
+*.postman_environment.json
+*.postman_globals.json

@@ -16,22 +16,7 @@ export default function QuestionRow({ question, index, onUpdate, onRemove }) {
                     placeholder="e.g. What was the user doing on this date?" />
             </div>
 
-            <div className="cs-row-2col">
-                <div className="cs-field">
-                    <label className="cs-label">Type</label>
-                    <select className="cs-input" value={question.question_type}
-                        onChange={(e) => onUpdate({ ...question, question_type: e.target.value })}>
-                        <option value="phase_question">Phase Question</option>
-                        <option value="end_of_scenario">End-of-scenario</option>
-                    </select>
-                </div>
-                <label className="cs-checkbox-row">
-                    <input type="checkbox" className="cs-checkbox"
-                        checked={question.blocks_progression}
-                        onChange={(e) => onUpdate({ ...question, blocks_progression: e.target.checked })} />
-                    <span className="cs-checkbox-label">Blocks progression</span>
-                </label>
-            </div>
+
         </div>
     );
 }

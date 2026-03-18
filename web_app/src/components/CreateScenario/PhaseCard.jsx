@@ -61,7 +61,7 @@ export default function PhaseCard({ phase, index, total, onUpdate, onRemove, onM
         const newQuestion = {
             _id: Math.random().toString(36).slice(2, 10),
             question_text: "",
-            blocks_progression: false,
+            blocks_progression: true,
             question_type: "phase_question",
         };
         onUpdate({ ...phase, questions: [...phase.questions, newQuestion] });

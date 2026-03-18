@@ -511,7 +511,7 @@ export default function Scenarios() {
     );
 
     const handleEdit = (scenario) => {
-        console.log("Navigate to editor for:", scenario.id);
+        navigate(`/edit-scenario/${scenario.id}`);
     };
 
     const handlePublishToggle = (scenarioId, newPublishedState) => {
