@@ -16,7 +16,13 @@ export default function QuestionRow({ question, index, onUpdate, onRemove }) {
                     placeholder="e.g. What was the user doing on this date?" />
             </div>
 
-
+            <div className="cs-field" style={{ maxWidth: 180 }}>
+                <label className="cs-label">Max Score (pts)</label>
+                <input className="cs-input" type="number" min={1} max={1000}
+                    value={question.max_score}
+                    onChange={(e) => onUpdate({ ...question, max_score: parseFloat(e.target.value) || 10 })}
+                    placeholder="e.g. 10" />
+            </div>
         </div>
     );
 }

@@ -70,13 +70,9 @@ function InjectCard({ inject, isNew }) {
 }
 
 // ─── Objectives Panel ─────────────────────────────────────────────────────────
-function ObjectivesPanel({ phase, objectives, onToggle, collapsed, onCollapse }) {
-    if (!phase) return null;
-
-    const main     = objectives.filter(o => o.objective_type === "main");
-    const side     = objectives.filter(o => o.objective_type === "side");
-    const blocking = objectives.filter(o => o.blocks_progression && !o.completed).length;
-    const total    = objectives.filter(o => o.blocks_progression).length;
+function ObjectivesPanel({ objectives, onSubmitObjective, responses, collapsed, onCollapse }) {
+    const main = objectives.filter(o => o.objective_type === "main");
+    const side = objectives.filter(o => o.objective_type === "side");
 
     return (
         <div className={`sim-objectives${collapsed ? " sim-objectives--collapsed" : ""}`}>
@@ -99,14 +95,7 @@ function ObjectivesPanel({ phase, objectives, onToggle, collapsed, onCollapse })
             {!collapsed && (
                 <div className="sim-objectives__body">
                     {objectives.length === 0 && (
-                        <div className="sim-objectives__empty">NO OBJECTIVES THIS PHASE</div>
-                    )}
-
-                    {blocking > 0 && (
-                        <div className="sim-objectives__gate-warn">
-                            <span className="sim-objectives__gate-icon">⚠</span>
-                            {total - blocking}/{total} gates cleared
-                        </div>
+                        <div className="sim-objectives__empty">NO OBJECTIVES</div>
                     )}
 
                     {main.length > 0 && (
@@ -115,7 +104,7 @@ function ObjectivesPanel({ phase, objectives, onToggle, collapsed, onCollapse })
                                 PRIMARY
                             </div>
                             {main.map(obj => (
-                                <ObjectiveRow key={obj.id} obj={obj} onToggle={onToggle} />
+                                <MainObjectiveRow key={obj.id} obj={obj} />
                             ))}
                         </div>
                     )}
@@ -123,10 +112,15 @@ function ObjectivesPanel({ phase, objectives, onToggle, collapsed, onCollapse })
                     {side.length > 0 && (
                         <div className="sim-objectives__group">
                             <div className="sim-objectives__group-label sim-objectives__group-label--side">
-                                SECONDARY
+                                TASKS
                             </div>
                             {side.map(obj => (
-                                <ObjectiveRow key={obj.id} obj={obj} onToggle={onToggle} />
+                                <SideObjectiveRow
+                                    key={obj.id}
+                                    obj={obj}
+                                    response={responses[obj.id]}
+                                    onSubmit={(answer) => onSubmitObjective(obj.id, answer)}
+                                />
                             ))}
                         </div>
                     )}
@@ -136,20 +130,68 @@ function ObjectivesPanel({ phase, objectives, onToggle, collapsed, onCollapse })
     );
 }
 
-function ObjectiveRow({ obj, onToggle }) {
-    const isMain = obj.objective_type === "main";
+// Main objectives are purely read-only reference guides
+function MainObjectiveRow({ obj }) {
     return (
-        <div
-            className={`sim-obj-row${obj.completed ? " sim-obj-row--done" : ""}${obj.blocks_progression && !obj.completed ? " sim-obj-row--blocking" : ""}`}
-            onClick={() => onToggle(obj.id)}
-        >
-            <span className={`sim-obj-row__bullet${isMain ? " sim-obj-row__bullet--main" : " sim-obj-row__bullet--side"}`}>
-                {obj.completed ? "◆" : isMain ? "◇" : "◈"}
-            </span>
+        <div className="sim-obj-row">
+            <span className="sim-obj-row__bullet sim-obj-row__bullet--main">◇</span>
             <span className="sim-obj-row__text">{obj.description}</span>
-            {obj.blocks_progression && !obj.completed && (
-                <span className="sim-obj-row__lock" title="Required for phase progression">⬡</span>
-            )}
+        </div>
+    );
+}
+
+// Side objectives have a text input, submit button, attempt tracking, and scoring feedback
+function SideObjectiveRow({ obj, response, onSubmit }) {
+    const [draft, setDraft] = React.useState(response?.answer || "");
+    const isLocked      = response?.is_locked || false;
+    const attemptsUsed  = response?.attempts_used || 0;
+    const attemptsMax   = obj.max_attempts || null;
+    const hasCorrect    = !!obj.correct_answer;
+    const isCorrect     = response?.is_correct;
+    const attemptsLeft  = attemptsMax ? attemptsMax - attemptsUsed : null;
+    const canSubmit     = !isLocked && draft.trim() && (attemptsLeft === null || attemptsLeft > 0);
+
+    // Scoring display
+    let scoreDisplay = null;
+    if (hasCorrect && response) {
+        if (isCorrect) {
+            scoreDisplay = <span className="sim-obj-score sim-obj-score--correct">1/1 ◆</span>;
+        } else if (isLocked || attemptsLeft === 0) {
+            scoreDisplay = <span className="sim-obj-score sim-obj-score--wrong">0/1 ✕</span>;
+        }
+    }
+
+    return (
+        <div className={`sim-obj-row sim-obj-row--side${isCorrect ? " sim-obj-row--correct" : ""}${(isLocked && !isCorrect) ? " sim-obj-row--locked" : ""}`}>
+            <div className="sim-obj-row__side-header">
+                <span className="sim-obj-row__bullet sim-obj-row__bullet--side">◈</span>
+                <span className="sim-obj-row__text">{obj.description}</span>
+                {scoreDisplay}
+            </div>
+            <textarea
+                className="sim-obj-row__input"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                placeholder="> enter response..."
+                rows={2}
+                disabled={isLocked}
+            />
+            <div className="sim-obj-row__footer">
+                {attemptsMax && (
+                    <span className="sim-obj-row__attempts">
+                        {isLocked ? "LOCKED" : `${attemptsLeft} attempt${attemptsLeft !== 1 ? "s" : ""} left`}
+                    </span>
+                )}
+                {!isLocked && (
+                    <button
+                        className={`sim-obj-row__submit${canSubmit ? " sim-obj-row__submit--ready" : ""}`}
+                        disabled={!canSubmit}
+                        onClick={() => onSubmit(draft)}
+                    >
+                        [ SUBMIT ]
+                    </button>
+                )}
+            </div>
         </div>
     );
 }
@@ -478,17 +520,18 @@ export default function SimulatorPage() {
     const [submitting, setSubmitting] = useState(false);
 
     // ── Runtime state ──────────────────────────────────────────────────────────
-    const [phaseIndex,      setPhaseIndex]      = useState(0);
-    const [objectives,      setObjectives]      = useState([]);
-    const [receivedInjects, setReceivedInjects] = useState([]);
-    const [newInjectId,     setNewInjectId]     = useState(null);
-    const [timeLeft,        setTimeLeft]        = useState(0);
-    const [elapsed,         setElapsed]         = useState(0);
-    const [phaseElapsed,    setPhaseElapsed]    = useState(0);
-    const [releaseSchedule, setReleaseSchedule] = useState({});
-    const [objCollapsed,    setObjCollapsed]    = useState(false);
-    const [overlay,         setOverlay]         = useState(null);
-    const [nextPhaseIdx,    setNextPhaseIdx]    = useState(null);
+    const [phaseIndex,        setPhaseIndex]        = useState(0);
+    const [allObjectives,     setAllObjectives]     = useState([]);
+    const [objResponses,      setObjResponses]      = useState({}); // { [objectiveId]: response }
+    const [receivedInjects,   setReceivedInjects]   = useState([]);
+    const [newInjectId,       setNewInjectId]       = useState(null);
+    const [timeLeft,          setTimeLeft]          = useState(0);
+    const [elapsed,           setElapsed]           = useState(0);
+    const [phaseElapsed,      setPhaseElapsed]      = useState(0);
+    const [releaseSchedule,   setReleaseSchedule]   = useState({});
+    const [objCollapsed,      setObjCollapsed]      = useState(false);
+    const [overlay,           setOverlay]           = useState(null);
+    const [nextPhaseIdx,      setNextPhaseIdx]      = useState(null);
     const feedRef        = useRef(null);
     // Track released inject IDs in a ref so the release-check effect doesn't
     // need receivedInjects in its dependency array, preventing the race condition
@@ -497,13 +540,13 @@ export default function SimulatorPage() {
 
     // ── Derived values ─────────────────────────────────────────────────────────
     const currentPhase   = allPhases[phaseIndex];
-    const phaseObjs      = currentPhase ? objectives.filter(o => o.phase_id === currentPhase.id) : [];
     const phaseQuestions = currentPhase ? allQuestions.filter(q => q.phase_id === currentPhase.id) : [];
     const endQuestions   = allQuestions.filter(q => q.question_type === "end_of_scenario");
-    const blockingLeft   = phaseObjs.filter(o => o.blocks_progression && !o.completed).length;
-    const gatesTotal     = phaseObjs.filter(o => o.blocks_progression).length;
-    const gatesDone      = gatesTotal - blockingLeft;
-    const isTimerFrozen  = !!(currentPhase?.requires_completion && blockingLeft > 0 && timeLeft === 0);
+    // Objectives are scenario-wide — no phase filtering, no blocking
+    const blockingLeft   = 0;
+    const gatesTotal     = 0;
+    const gatesDone      = 0;
+    const isTimerFrozen  = false;
 
     // ── Fetch scenario data and create attempt on mount ────────────────────────
     // These two API calls happen sequentially inside a single useEffect so the
@@ -528,7 +571,7 @@ export default function SimulatorPage() {
                 setAllPhases(data.phases);
                 setAllInjects(data.injects);
                 setAllQuestions(data.questions);
-                setObjectives(data.objectives.map(o => ({ ...o, completed: false })));
+                setAllObjectives(data.objectives);
 
                 if (data.phases.length > 0) {
                     setTimeLeft(data.phases[0].duration_minutes * 60);
@@ -661,12 +704,46 @@ export default function SimulatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [timeLeft, blockingLeft]);
 
-    // ── Toggle objective completion ────────────────────────────────────────────
-    const handleToggleObjective = useCallback((objId) => {
-        setObjectives(prev =>
-            prev.map(o => o.id === objId ? { ...o, completed: !o.completed } : o)
-        );
-    }, []);
+    // ── Submit a side objective answer ────────────────────────────────────────
+    const handleSubmitObjective = useCallback(async (objectiveId, answer) => {
+        if (!attemptId) return;
+        try {
+            const res = await fetch(
+                `${process.env.REACT_APP_API_URL}/api/scenarios/responses`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ attempt_id: attemptId, objective_id: objectiveId, answer }),
+                }
+            );
+            if (!res.ok) throw new Error("Failed to submit objective");
+            const data = await res.json();
+            setObjResponses(prev => ({
+                ...prev,
+                [objectiveId]: {
+                    answer,
+                    is_correct:    data.is_correct,
+                    score:         data.score,
+                    attempts_used: data.attempts_used,
+                    is_locked:     data.is_locked,
+                },
+            }));
+        } catch (err) {
+            console.error("Objective submission error:", err);
+        }
+    }, [attemptId, token]);
+
+    // ── Auto-submit unlocked side objectives at scenario end ───────────────────
+    const autoSubmitObjectives = useCallback(async () => {
+        const sideObjs = allObjectives.filter(o => o.objective_type === "side");
+        for (const obj of sideObjs) {
+            const resp = objResponses[obj.id];
+            // Only auto-submit if there's a draft answer and not already locked
+            if (resp && resp.answer && !resp.is_locked) {
+                await handleSubmitObjective(obj.id, resp.answer);
+            }
+        }
+    }, [allObjectives, objResponses, handleSubmitObjective]);
 
     // ── Submit answers for a phase or end-of-scenario ──────────────────────────
     // Called by QuestionsModal's onSubmit with the answers map.
@@ -682,40 +759,27 @@ export default function SimulatorPage() {
     const handleSubmitAnswers = useCallback(async (answers, isEndOfScenario) => {
         setSubmitting(true);
         try {
-            const res = await fetch(
-                `${process.env.REACT_APP_API_URL}/api/submissions`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        attempt_id: attemptId,
-                        // Convert { "q-id-1": "my answer" } to
-                        // [ { question_id: "q-id-1", answer: "my answer" } ]
-                        answers: Object.entries(answers).map(([question_id, answer]) => ({
-                            question_id,
-                            answer,
-                        })),
-                    }),
-                }
+            // Submit each question answer as a separate response
+            await Promise.all(
+                Object.entries(answers).map(([question_id, answer]) =>
+                    fetch(`${process.env.REACT_APP_API_URL}/api/scenarios/responses`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                        body: JSON.stringify({ attempt_id: attemptId, question_id, answer }),
+                    })
+                )
             );
-            if (!res.ok) throw new Error("Failed to submit answers");
         } catch (err) {
-            // Log but don't block progression — the student answered, we just
-            // couldn't save. In production you might show a warning here.
             console.error("Answer submission error:", err);
         } finally {
             setSubmitting(false);
         }
 
-        // Keep track of if it is the final phase so we know whether to show the transition overlay or the complete screen after submission.
         const isFinalPhase = phaseIndex === allPhases.length - 1;
 
-
         if (isEndOfScenario) {
-            // Mark the attempt as completed then show the complete screen.
+            // Auto-submit any unlocked side objective answers, then complete
+            await autoSubmitObjectives();
             if (attemptId) {
                 fetch(`${process.env.REACT_APP_API_URL}/api/attempts/${attemptId}/complete`, {
                     method: "PATCH",
@@ -723,26 +787,20 @@ export default function SimulatorPage() {
                 }).catch(err => console.error("Failed to complete attempt:", err));
             }
             setOverlay("complete");
-
-        } else if (isFinalPhase){
+        } else if (isFinalPhase) {
             if (endQuestions.length > 0) {
                 setOverlay("questions-end");
             } else {
+                await autoSubmitObjectives();
                 setOverlay("complete");
             }
-            
-        } else{
+        } else {
             setOverlay("transition");
         }
-    }, [token, attemptId, phaseIndex, allPhases.length, endQuestions.length]);
+    }, [token, attemptId, phaseIndex, allPhases.length, endQuestions.length, autoSubmitObjectives]);
 
     // ── Determine what to show at phase end ────────────────────────────────────
     const handlePhaseEnd = useCallback(() => {
-        // Check objectives with blocks_progression — if any are incomplete, show the warning.
-        if (currentPhase?.requires_completion && blockingLeft > 0) {
-            console.log("Cannot progress: objectives not completed");
-            return;
-        }
         
         const nextIdx = phaseIndex + 1;
 
@@ -857,9 +915,9 @@ export default function SimulatorPage() {
                 </div>
 
                 <ObjectivesPanel
-                    phase={currentPhase}
-                    objectives={phaseObjs}
-                    onToggle={handleToggleObjective}
+                    objectives={allObjectives}
+                    responses={objResponses}
+                    onSubmitObjective={handleSubmitObjective}
                     collapsed={objCollapsed}
                     onCollapse={() => setObjCollapsed(v => !v)}
                 />

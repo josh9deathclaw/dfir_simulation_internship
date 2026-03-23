@@ -41,7 +41,9 @@ export default function ScenarioLevelSection({ data, onChange }) {
             _id: Math.random().toString(36).slice(2, 10),
             description: "",
             objective_type: "main",
-            blocks_progression: false,
+            max_score: 10,
+            correct_answer: "",
+            max_attempts: "",
         };
         onChange({ ...data, objectives: [...data.objectives, newObjective] });
     };
@@ -62,6 +64,7 @@ export default function ScenarioLevelSection({ data, onChange }) {
             question_text: "",
             blocks_progression: true,
             question_type: "end_of_scenario",
+            max_score: 10,
         };
         onChange({ ...data, questions: [...data.questions, newQuestion] });
     };

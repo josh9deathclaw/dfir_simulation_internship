@@ -1,5 +1,4 @@
 import InjectRow from "./InjectRow";
-import ObjectiveRow from "./ObjectiveRow";
 import QuestionRow from "./QuestionRow";
 
 export default function PhaseCard({ phase, index, total, onUpdate, onRemove, onMove }) {
@@ -37,32 +36,13 @@ export default function PhaseCard({ phase, index, total, onUpdate, onRemove, onM
         onUpdate({ ...phase, injects: newInjects });
     };
 
-    const addObjective = () => {
-        const newObjective = {
-            _id: Math.random().toString(36).slice(2, 10),
-            description: "",
-            objective_type: "main",
-            blocks_progression: false,
-        };
-        onUpdate({ ...phase, objectives: [...phase.objectives, newObjective] });
-    };
-
-    const updateObjective = (objIdx, updated) => {
-        const newObjectives = phase.objectives.map((o, idx) => idx === objIdx ? updated : o);
-        onUpdate({ ...phase, objectives: newObjectives });
-    };
-
-    const removeObjective = (objIdx) => {
-        const newObjectives = phase.objectives.filter((_, idx) => idx !== objIdx);
-        onUpdate({ ...phase, objectives: newObjectives });
-    };
-
     const addQuestion = () => {
         const newQuestion = {
             _id: Math.random().toString(36).slice(2, 10),
             question_text: "",
             blocks_progression: true,
             question_type: "phase_question",
+            max_score: 10,
         };
         onUpdate({ ...phase, questions: [...phase.questions, newQuestion] });
     };
@@ -148,16 +128,6 @@ export default function PhaseCard({ phase, index, total, onUpdate, onRemove, onM
                         ))}
                     </div>
                     <button className="cs-add-btn" onClick={addInject}>+ Add Inject</button>
-
-                    <div className="cs-section-divider">Objectives</div>
-                    <div className="cs-item-list">
-                        {phase.objectives.map((objective, idx) => (
-                            <ObjectiveRow key={objective._id} objective={objective} index={idx}
-                                onUpdate={(updated) => updateObjective(idx, updated)}
-                                onRemove={() => removeObjective(idx)} />
-                        ))}
-                    </div>
-                    <button className="cs-add-btn" onClick={addObjective}>+ Add Objective</button>
 
                     <div className="cs-section-divider">Questions</div>
                     <div className="cs-item-list">

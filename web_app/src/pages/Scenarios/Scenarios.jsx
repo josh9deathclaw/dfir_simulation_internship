@@ -484,13 +484,13 @@ export default function Scenarios() {
     }, [token]);
 
     const fetchClasses = useCallback(() => {
-    fetch(`${process.env.REACT_APP_API_URL}/api/classes`, {
-        headers: { Authorization: `Bearer ${token}` },
-    })
-        .then((r) => r.json())
-        .then((data) => { setClasses(data); })
-        .catch(() => {});
-}, [token]);
+        fetch(`${process.env.REACT_APP_API_URL}/api/classes`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then((r) => r.ok ? r.json() : [])
+            .then((data) => { setClasses(Array.isArray(data) ? data : []); })
+            .catch(() => { setClasses([]); });
+    }, [token]);
 
     useEffect(() => { 
         fetchScenarios(); 

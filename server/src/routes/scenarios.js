@@ -234,19 +234,18 @@ router.post('/', authenticateToken, async (req, res) => {
         // Insert objectives
         for (let i = 0; i < objectives.length; i++) {
             const obj = objectives[i];
-            const realPhaseId = obj._phaseId ? (phaseIdMap[obj._phaseId] || null) : null;
- 
             await client.query(
                 `INSERT INTO objectives
-                     (scenario_id, phase_id, description, objective_type,
-                      blocks_progression, order_index)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                     (scenario_id, description, objective_type,
+                      max_score, correct_answer, max_attempts, order_index)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [
                     scenarioId,
-                    realPhaseId,
                     obj.description.trim(),
                     ['main', 'side'].includes(obj.objective_type) ? obj.objective_type : 'main',
-                    obj.blocks_progression || false,
+                    obj.objective_type === 'side' ? (parseFloat(obj.max_score) || 10) : null,
+                    obj.objective_type === 'side' && obj.correct_answer?.trim() ? obj.correct_answer.trim() : null,
+                    obj.objective_type === 'side' && obj.max_attempts ? parseInt(obj.max_attempts) : null,
                     i,
                 ]
             );
@@ -256,18 +255,18 @@ router.post('/', authenticateToken, async (req, res) => {
         for (let i = 0; i < questions.length; i++) {
             const q = questions[i];
             const realPhaseId = q._phaseId ? (phaseIdMap[q._phaseId] || null) : null;
- 
             await client.query(
                 `INSERT INTO questions
                      (scenario_id, phase_id, question_text, question_type,
-                      blocks_progression, order_index)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                      blocks_progression, max_score, order_index)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [
                     scenarioId,
                     realPhaseId,
                     q.question_text.trim(),
-                    q.question_type    || 'phase_question',
+                    q.question_type || 'phase_question',
                     q.blocks_progression || false,
+                    parseFloat(q.max_score) || 10,
                     i,
                 ]
             );
@@ -385,26 +384,21 @@ router.get('/:id/full', authenticateToken, async (req, res) => {
 
         // Fetch Objectives
         const objectivesRes = await db.query(
-            `SELECT id, phase_id, description, objective_type, 
-            blocks_progression, order_index
-            FROM objectives
-            WHERE scenario_id = $1
-            ORDER BY order_index ASC`,
+            `SELECT id, description, objective_type,
+                    max_score, correct_answer, max_attempts, order_index
+             FROM objectives
+             WHERE scenario_id = $1
+             ORDER BY order_index ASC`,
             [scenarioId]
         );
 
         // Fetch Questions
         const questionsRes = await db.query(
             `SELECT id, phase_id, question_text, question_type,
-                    blocks_progression, order_index
+                    blocks_progression, max_score, order_index
              FROM questions
-             WHERE (
-                phase_id IN (
-                    SELECT id FROM phases WHERE scenario_id = $1
-                )
-                OR (phase_id IS NULL AND scenario_id = $1)
-            )
-            ORDER BY order_index ASC`,
+             WHERE scenario_id = $1
+             ORDER BY order_index ASC`,
             [scenarioId]
         );
 
@@ -593,13 +587,28 @@ router.put('/:id', authenticateToken, async (req, res) => {
         // Re-insert objectives
         for (let i = 0; i < objectives.length; i++) {
             const obj = objectives[i];
-            const realPhaseId = obj._phaseId ? (phaseIdMap[obj._phaseId] || null) : null;
             await client.query(
                 `INSERT INTO objectives
-                     (scenario_id, phase_id, description, objective_type,
-                      blocks_progression, order_index)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [scenarioId, realPhaseId, obj.description.trim(), ['main', 'side'].includes(obj.objective_type) ? obj.objective_type : 'main', obj.blocks_progression || false, i]
+                    (scenario_id, description, objective_type,
+                        max_score, correct_answer, max_attempts, order_index)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [
+                    scenarioId,
+                    obj.description.trim(),
+                    ['main', 'side'].includes(obj.objective_type) ? obj.objective_type : 'main',
+
+                    obj.objective_type === 'side' ? (parseFloat(obj.max_score) || 10) : 0, // ✅ FIX
+
+                    obj.objective_type === 'side' && obj.correct_answer?.trim()
+                        ? obj.correct_answer.trim()
+                        : null,
+
+                    obj.objective_type === 'side' && obj.max_attempts
+                        ? parseInt(obj.max_attempts)
+                        : null,
+
+                    i,
+                ]
             );
         }
 
@@ -610,9 +619,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
             await client.query(
                 `INSERT INTO questions
                      (scenario_id, phase_id, question_text, question_type,
-                      blocks_progression, order_index)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [scenarioId, realPhaseId, q.question_text.trim(), q.question_type || 'phase_question', q.blocks_progression || false, i]
+                      blocks_progression, max_score, order_index)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [scenarioId, realPhaseId, q.question_text.trim(), q.question_type || 'phase_question', q.blocks_progression || false, parseFloat(q.max_score) || 10, i]
             );
         }
 
@@ -630,6 +639,153 @@ router.put('/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Internal server error' });
     } finally {
         client.release();
+    }
+});
+
+
+// ─── Responses (unified question + objective answers) ─────────────────────────
+
+// POST /api/responses — save a student's answer for a question or objective
+router.post('/responses', authenticateToken, async (req, res) => {
+    const { id: studentId } = req.user;
+    const { attempt_id, question_id, objective_id, answer } = req.body;
+
+    if (!attempt_id) return res.status(400).json({ message: 'attempt_id is required' });
+    if (!question_id && !objective_id) return res.status(400).json({ message: 'question_id or objective_id is required' });
+    if (question_id && objective_id) return res.status(400).json({ message: 'Provide only one of question_id or objective_id' });
+
+    try {
+        // If objective, check attempt limit and auto-score if correct_answer set
+        let is_correct = null;
+        let score = null;
+        let attempts_used = 0;
+
+        if (objective_id) {
+            const objRes = await db.query(
+                'SELECT correct_answer, max_attempts, max_score FROM objectives WHERE id = $1',
+                [objective_id]
+            );
+            if (objRes.rows.length === 0) return res.status(404).json({ message: 'Objective not found' });
+            const obj = objRes.rows[0];
+
+            // Check existing response for this objective/attempt
+            const existing = await db.query(
+                'SELECT id, attempts_used, is_locked FROM responses WHERE attempt_id = $1 AND objective_id = $2',
+                [attempt_id, objective_id]
+            );
+
+            if (existing.rows.length > 0) {
+                const row = existing.rows[0];
+                if (row.is_locked) return res.status(403).json({ message: 'This objective is locked and cannot be changed' });
+                attempts_used = row.attempts_used + 1;
+                if (obj.max_attempts && attempts_used > obj.max_attempts) {
+                    return res.status(403).json({ message: 'Maximum attempts reached' });
+                }
+            } else {
+                attempts_used = 1;
+            }
+
+            // Auto-score if correct_answer set — case-insensitive contains check
+            if (obj.correct_answer) {
+                const normalAnswer  = (answer || '').toLowerCase().trim();
+                const normalCorrect = obj.correct_answer.toLowerCase().trim();
+                is_correct = normalAnswer.includes(normalCorrect) || normalCorrect.includes(normalAnswer);
+                score = is_correct ? (obj.max_score || 10) : 0;
+            }
+
+            // Lock if max_attempts reached
+            const is_locked = obj.max_attempts ? attempts_used >= obj.max_attempts : false;
+
+            if (existing.rows.length > 0) {
+                // Update existing response
+                await db.query(
+                    `UPDATE responses
+                     SET answer = $1, is_correct = $2, score = $3,
+                         attempts_used = $4, is_locked = $5, updated_at = now()
+                     WHERE id = $6`,
+                    [answer, is_correct, score, attempts_used, is_locked, existing.rows[0].id]
+                );
+                return res.json({ id: existing.rows[0].id, is_correct, score, attempts_used, is_locked });
+            }
+
+            // Insert new response
+            const result = await db.query(
+                `INSERT INTO responses
+                     (attempt_id, student_id, objective_id, answer,
+                      is_correct, score, attempts_used, is_locked)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 RETURNING id`,
+                [attempt_id, studentId, objective_id, answer, is_correct, score, attempts_used, is_locked]
+            );
+            return res.status(201).json({ id: result.rows[0].id, is_correct, score, attempts_used, is_locked });
+        }
+
+        // Question response — just save, no auto-scoring
+        const existing = await db.query(
+            'SELECT id FROM responses WHERE attempt_id = $1 AND question_id = $2',
+            [attempt_id, question_id]
+        );
+
+        if (existing.rows.length > 0) {
+            await db.query(
+                `UPDATE responses SET answer = $1, updated_at = now() WHERE id = $2`,
+                [answer, existing.rows[0].id]
+            );
+            return res.json({ id: existing.rows[0].id });
+        }
+
+        const result = await db.query(
+            `INSERT INTO responses (attempt_id, student_id, question_id, answer)
+             VALUES ($1, $2, $3, $4) RETURNING id`,
+            [attempt_id, studentId, question_id, answer]
+        );
+        res.status(201).json({ id: result.rows[0].id });
+
+    } catch (err) {
+        console.error('POST /api/scenarios/responses error:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// GET /api/responses?attempt_id=x — load all responses for an attempt (for resume)
+router.get('/responses', authenticateToken, async (req, res) => {
+    const { attempt_id } = req.query;
+    if (!attempt_id) return res.status(400).json({ message: 'attempt_id is required' });
+
+    try {
+        const { rows } = await db.query(
+            `SELECT id, question_id, objective_id, answer,
+                    is_correct, score, attempts_used, is_locked
+             FROM responses
+             WHERE attempt_id = $1`,
+            [attempt_id]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error('GET /api/scenarios/responses error:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// PATCH /api/responses/:id — teacher updates score during grading
+router.patch('/responses/:id', authenticateToken, async (req, res) => {
+    const { role } = req.user;
+    if (role !== 'teacher' && role !== 'admin') {
+        return res.status(403).json({ message: 'Forbidden' });
+    }
+    const { score } = req.body;
+    if (score === undefined || score === null) return res.status(400).json({ message: 'score is required' });
+
+    try {
+        const result = await db.query(
+            `UPDATE responses SET score = $1, updated_at = now() WHERE id = $2 RETURNING id`,
+            [parseFloat(score), req.params.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Response not found' });
+        res.json({ id: result.rows[0].id, score: parseFloat(score) });
+    } catch (err) {
+        console.error('PATCH /api/scenarios/responses/:id error:', err);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 

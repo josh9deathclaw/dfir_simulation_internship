@@ -1,4 +1,6 @@
 export default function ObjectiveRow({ objective, index, onUpdate, onRemove }) {
+    const isSide = objective.objective_type === "side";
+
     return (
         <div className="cs-item-row">
             <div className="cs-item-row__header">
@@ -11,7 +13,9 @@ export default function ObjectiveRow({ objective, index, onUpdate, onRemove }) {
                 <label className="cs-label">Description</label>
                 <textarea className="cs-input cs-textarea" value={objective.description} rows={2}
                     onChange={(e) => onUpdate({ ...objective, description: e.target.value })}
-                    placeholder="e.g. Retrieve the user's browsing history" />
+                    placeholder={isSide
+                        ? "e.g. What date was the NDA breached?"
+                        : "e.g. Investigate the user's activity on the suspected date"} />
             </div>
 
             <div className="cs-row-2col">
@@ -23,13 +27,41 @@ export default function ObjectiveRow({ objective, index, onUpdate, onRemove }) {
                         <option value="side">Side</option>
                     </select>
                 </div>
-                <label className="cs-checkbox-row">
-                    <input type="checkbox" className="cs-checkbox"
-                        checked={objective.blocks_progression}
-                        onChange={(e) => onUpdate({ ...objective, blocks_progression: e.target.checked })} />
-                    <span className="cs-checkbox-label">Blocks phase progression</span>
-                </label>
+
+                {isSide && (
+                    <div className="cs-field">
+                        <label className="cs-label">Max Score (pts)</label>
+                        <input className="cs-input" type="number" min={1} max={1000}
+                            value={objective.max_score}
+                            onChange={(e) => onUpdate({ ...objective, max_score: parseFloat(e.target.value) || 10 })}
+                            placeholder="e.g. 10" />
+                    </div>
+                )}
             </div>
+
+            {isSide && (
+                <>
+                    <div className="cs-row-2col">
+                        <div className="cs-field">
+                            <label className="cs-label">Correct Answer</label>
+                            <input className="cs-input" type="text"
+                                value={objective.correct_answer}
+                                onChange={(e) => onUpdate({ ...objective, correct_answer: e.target.value })}
+                                placeholder="Leave blank to disable auto-scoring" />
+                        </div>
+                        <div className="cs-field">
+                            <label className="cs-label">Max Attempts</label>
+                            <input className="cs-input" type="number" min={1} max={10}
+                                value={objective.max_attempts}
+                                onChange={(e) => onUpdate({ ...objective, max_attempts: parseInt(e.target.value) || "" })}
+                                placeholder="Leave blank for unlimited" />
+                        </div>
+                    </div>
+                    <span className="cs-hint">
+                        Correct answer matching is case-insensitive. Leave blank to skip auto-scoring — teacher grades manually.
+                    </span>
+                </>
+            )}
         </div>
     );
 }

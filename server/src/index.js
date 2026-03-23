@@ -38,10 +38,16 @@ const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 const attemptsRoutes    = require('./routes/attempts');
-const submissionsRoutes = require('./routes/submissions');
-
 app.use('/api/attempts',     attemptsRoutes);
+
+const submissionsRoutes = require('./routes/submissions');
 app.use('/api/submissions',  submissionsRoutes);
+
+const gradingRoutes = require('./routes/grading');
+app.use('/api/grading', gradingRoutes);
+
+const resultsRoutes = require('./routes/results');
+app.use('/api/results', resultsRoutes);
 
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);

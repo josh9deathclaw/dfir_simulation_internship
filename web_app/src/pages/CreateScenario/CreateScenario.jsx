@@ -54,11 +54,11 @@ function newInject(releaseType = "random_in_phase") {
 }
 
 function newObjective() {
-    return { _id: uid(), description: "", objective_type: "main", blocks_progression: false };
+    return { _id: uid(), description: "", objective_type: "main", max_score: 10, correct_answer: "", max_attempts: "" };
 }
 
 function newQuestion(type = "phase_question") {
-    return { _id: uid(), question_text: "", blocks_progression: false, question_type: type };
+    return { _id: uid(), question_text: "", blocks_progression: false, question_type: type, max_score: 10 };
 }
 
 // ─── Shared Primitives ────────────────────────────────────────────────────────

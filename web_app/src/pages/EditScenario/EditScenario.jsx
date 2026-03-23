@@ -352,14 +352,7 @@ function mapApiResponseToState(data) {
                     guaranteed_release_minutes: inj.guaranteed_release_minutes ?? "",
                     notify_student: inj.notify_student,
                 })),
-            objectives: objectives
-                .filter((obj) => obj.phase_id === p.id)
-                .map((obj) => ({
-                    _id: uid(),
-                    description: obj.description,
-                    objective_type: obj.objective_type,
-                    blocks_progression: obj.blocks_progression,
-                })),
+            objectives: [],
             questions: questions
                 .filter((q) => q.phase_id === p.id)
                 .map((q) => ({
@@ -367,6 +360,7 @@ function mapApiResponseToState(data) {
                     question_text: q.question_text,
                     question_type: q.question_type,
                     blocks_progression: q.blocks_progression,
+                    max_score: q.max_score ?? 10,
                 })),
         };
     });
@@ -392,12 +386,13 @@ function mapApiResponseToState(data) {
                 notify_student: inj.notify_student,
             })),
         objectives: objectives
-            .filter((obj) => obj.phase_id === null)
             .map((obj) => ({
                 _id: uid(),
                 description: obj.description,
                 objective_type: obj.objective_type,
-                blocks_progression: obj.blocks_progression,
+                max_score: obj.max_score ?? 10,
+                correct_answer: obj.correct_answer || "",
+                max_attempts: obj.max_attempts || "",
             })),
         questions: questions
             .filter((q) => q.phase_id === null)
@@ -406,6 +401,7 @@ function mapApiResponseToState(data) {
                 question_text: q.question_text,
                 question_type: q.question_type,
                 blocks_progression: q.blocks_progression,
+                max_score: q.max_score ?? 10,
             })),
     };
 
