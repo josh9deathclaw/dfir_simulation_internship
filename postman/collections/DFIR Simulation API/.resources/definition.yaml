@@ -33,3 +33,9 @@ variables:
     value: ''
   - key: student_id
     value: ''
+  - key: attempt_id
+    value: ''
+  - key: question_id
+    value: ''
+  - key: response_id
+    value: ''

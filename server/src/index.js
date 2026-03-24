@@ -49,6 +49,9 @@ app.use('/api/grading', gradingRoutes);
 const resultsRoutes = require('./routes/results');
 app.use('/api/results', resultsRoutes);
 
+const vmRoutes = require('./routes/vm');
+app.use('/api/vm', vmRoutes);
+
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

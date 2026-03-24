@@ -1,0 +1,20 @@
+$kind: http-request
+name: Edit Scenario
+method: PUT
+url: '{{base_url}}/api/scenarios/:id'
+order: 7000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+pathVariables:
+  - key: id
+    value: '{{scenario_id}}'
+body:
+  type: json
+  content: |-
+    {
+      "title": "Updated Scenario Title",
+      "description": "Updated scenario description"
+    }

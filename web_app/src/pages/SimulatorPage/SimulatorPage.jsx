@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./SimulatorPage.css";
 import { useParams, useNavigate } from "react-router-dom";
 import { getToken } from "../../utils/auth";
-
+import VMPanel from '../SimulatorPage/VMPanel';
 // ─── Utility helpers ───────────────────────────────────────────────────────────
 function formatTime(seconds) {
     if (seconds <= 0) return "00:00";
@@ -33,13 +33,7 @@ function InjectCard({ inject, isNew }) {
     const color       = getFileTypeColor(inject.file_type);
     const displayName = inject.file_name || inject.file_path?.split("/").pop() || null;
 
-    const handleRetrieve = () => {
-        console.log("[InjectCard] file_path:", inject.file_path);
-        console.log("[InjectCard] full URL:", `${process.env.REACT_APP_API_URL}/${inject.file_path}`);
-        if (inject.file_path) {
-            window.open(`${process.env.REACT_APP_API_URL}/${inject.file_path}`, "_blank");
-        }
-    };
+    // File retrieval handled automatically via VM inject delivery.
 
     return (
         <div className={`sim-inject${isNew ? " sim-inject--new" : ""}`}>
@@ -58,9 +52,6 @@ function InjectCard({ inject, isNew }) {
                             {inject.file_type || "FILE"}
                         </span>
                         <span className="sim-inject__file-name">{displayName}</span>
-                        <button className="sim-inject__dl" onClick={handleRetrieve}>
-                            [ RETRIEVE ]
-                        </button>
                     </div>
                 )}
             </div>
@@ -222,7 +213,7 @@ function BottomBar({
                     ))}
                 </div>
                 <div className="sim-bottombar__phase-label">
-                    <span className="sim-bottombar__phase-slash">// </span>
+                    <span className="sim-bottombar__phase-slash"> </span>
                     PHASE {phaseIndex + 1} — {phase?.title?.toUpperCase()}
                 </div>
                 {gatesTotal > 0 && (
@@ -353,7 +344,7 @@ function PhaseTransitionOverlay({ phase, phaseIndex, onDone }) {
 
     return (
         <div className="sim-transition">
-            <div className="sim-transition__glitch" data-text="// PHASE UNLOCKED">// PHASE UNLOCKED</div>
+            <div className="sim-transition__glitch" data-text="// PHASE UNLOCKED">PHASE UNLOCKED</div>
             <div className="sim-transition__phase">{phase?.title?.toUpperCase()}</div>
             <div className="sim-transition__num">PHASE {phaseIndex + 1}</div>
             <div className="sim-transition__scanlines" />
@@ -533,6 +524,8 @@ export default function SimulatorPage() {
     const [overlay,           setOverlay]           = useState(null);
     const [nextPhaseIdx,      setNextPhaseIdx]      = useState(null);
     const feedRef        = useRef(null);
+    // Guards against StrictMode double-invocation — ensures VM starts exactly once
+    const vmStartedRef   = useRef(false);
     // Track released inject IDs in a ref so the release-check effect doesn't
     // need receivedInjects in its dependency array, preventing the race condition
     // where an inject fires multiple times before alreadyReleased catches it.
@@ -596,6 +589,7 @@ export default function SimulatorPage() {
                 const { attempt_id } = await attemptRes.json();
                 setAttemptId(attempt_id);
 
+
             } catch (err) {
                 console.error("SimulatorPage load error:", err);
                 setFetchError(err.message);
@@ -606,22 +600,71 @@ export default function SimulatorPage() {
         load();
     }, [scenarioId, token]);
 
+    // ── Start VM once when attemptId is first set ─────────────────────────────
+    // Separate from the load() effect so StrictMode double-invoke does not
+    // cause a race. vmStartedRef ensures this fires exactly once per session.
+    useEffect(() => {
+        if (!attemptId || vmStartedRef.current) return;
+        vmStartedRef.current = true;
+
+        async function startVM() {
+            try {
+                const statusRes = await fetch(
+                    `${process.env.REACT_APP_API_URL}/api/vm/status/${attemptId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                const statusData = await statusRes.json();
+
+                if (statusData.running) {
+                    window.open(statusData.url, "ForensicWorkstation");
+                    return;
+                }
+
+                const vmRes = await fetch(
+                    `${process.env.REACT_APP_API_URL}/api/vm/start`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ attempt_id: attemptId }),
+                    }
+                );
+                if (vmRes.ok) {
+                    const vmData = await vmRes.json();
+                    window.open(vmData.url, "ForensicWorkstation");
+                }
+            } catch (vmErr) {
+                console.warn("VM start failed:", vmErr.message);
+            }
+        }
+
+        startVM();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [attemptId]);
+
     // ── Build inject release schedule when phase changes ───────────────────────
     // Scenario-wide injects (phase_id === null) are only scheduled on phase 0.
     // When the phase changes we reset the released-IDs ref but keep scenario-wide
     // inject IDs in it so they don't fire again on later phases.
     useEffect(() => {
         if (!currentPhase) return;
+
+        console.log('[Schedule] rebuilding for phase:', currentPhase.id);
+
         setPhaseElapsed(0);
 
         // Keep scenario-wide inject IDs so they don't re-fire on phase change
         const scenarioWideIds = new Set(
             allInjects.filter(inj => inj.phase_id === null).map(inj => inj.id)
         );
+
         // Preserve already-released scenario-wide IDs, clear phase-specific ones
         const preserved = new Set(
             [...releasedIdsRef.current].filter(id => scenarioWideIds.has(id))
         );
+
         releasedIdsRef.current = preserved;
 
         const phaseInjects = allInjects.filter(inj => {
@@ -631,20 +674,25 @@ export default function SimulatorPage() {
         });
 
         const schedule = {};
-        phaseInjects.forEach(inj => {
-            if (
-                inj.release_type === "guaranteed_in_phase" ||
-                inj.release_type === "guaranteed_in_scenario"
-            ) {
-                schedule[inj.id] = (inj.guaranteed_release_minutes || 0) * 60;
-            } else {
-                const minSec = (inj.min_delay_minutes || 0) * 60;
-                const maxSec = (inj.max_delay_minutes || 1) * 60;
-                schedule[inj.id] = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
-            }
-        });
+            phaseInjects.forEach(inj => {
+                let releaseAt;
 
-        setReleaseSchedule(schedule);
+                if (
+                    inj.release_type === "guaranteed_in_phase" ||
+                    inj.release_type === "guaranteed_in_scenario"
+                ) {
+                    releaseAt = (inj.guaranteed_release_minutes || 0) * 60;
+                } else {
+                    const minSec = (inj.min_delay_minutes || 0) * 60;
+                    const maxSec = (inj.max_delay_minutes || 1) * 60;
+                    releaseAt = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;
+                }
+
+                schedule[inj.id] = releaseAt;
+            });
+
+            setReleaseSchedule(schedule);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [phaseIndex, allInjects]);
 
@@ -674,22 +722,76 @@ export default function SimulatorPage() {
     // Uses releasedIdsRef instead of receivedInjects to avoid the race condition
     // where the effect re-runs on every state update and fires duplicates.
     useEffect(() => {
-        if (!currentPhase) return;
+        if (!currentPhase) {
+            console.log('[Inject effect] no currentPhase');
+            return;
+        }
+
+        if (!attemptId) {
+            console.log('[Inject effect] waiting for attemptId...');
+            return;
+        }
+
         const phaseInjects = allInjects.filter(
             inj => inj.phase_id === currentPhase.id || inj.phase_id === null
         );
+
         phaseInjects.forEach(inj => {
             const releaseAt = releaseSchedule[inj.id];
-            if (releaseAt === undefined) return;
+
+            if (releaseAt === undefined) {
+                console.log('[Inject skipped] no release schedule', inj.id);
+                return;
+            }
+
+            //console.log('[Inject check]', {
+            //    injId: inj.id,
+            //    phaseElapsed,
+            //    releaseAt,
+            //    alreadyReleased: releasedIdsRef.current.has(inj.id)
+            //});
+
             if (!releasedIdsRef.current.has(inj.id) && phaseElapsed >= releaseAt) {
+                console.log('[Inject TRIGGERED]', inj.id);
+
                 releasedIdsRef.current.add(inj.id);
+
+                // file_name may be null in DB — fall back to extracting from file_path
+                const injectFileName = inj.file_name || inj.file_path?.split('/').pop();
+                if (inj.file_path && injectFileName) {
+                    console.log('[Inject FETCH] sending', {
+                        attemptId,
+                        file_path: inj.file_path,
+                        file_name: inj.file_name
+                    });
+
+                    fetch(`${process.env.REACT_APP_API_URL}/api/vm/inject/${attemptId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            file_path: inj.file_path,
+                            file_name: injectFileName
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => console.log('[Inject SUCCESS]', data))
+                    .catch(err => console.warn('[Inject ERROR]', err));
+                } else {
+                    console.log('[Inject skipped] missing file data', inj);
+                }
+
                 const stamped = { ...inj, receivedAt: formatTimestamp() };
                 setReceivedInjects(prev => [stamped, ...prev]);
+
                 setNewInjectId(inj.id);
                 setTimeout(() => setNewInjectId(null), 2000);
             }
         });
-    }, [phaseElapsed, currentPhase, releaseSchedule, allInjects]);
+
+    }, [phaseElapsed, currentPhase, releaseSchedule, allInjects, token, attemptId]);
 
     // ── End phase when timer hits 0 ────────────────────────────────────────────
     // Triggers when:
@@ -827,7 +929,7 @@ export default function SimulatorPage() {
         } else {
             setOverlay("transition");
         }
-    }, [phaseIndex, allPhases.length, phaseQuestions.length, attemptId, token, blockingLeft, currentPhase, endQuestions.length]);
+    }, [phaseIndex, allPhases.length, phaseQuestions.length, attemptId, token, endQuestions.length]);
 
     // ── Advance to next phase ──────────────────────────────────────────────────
     const advancePhase = useCallback(() => {
@@ -884,6 +986,7 @@ export default function SimulatorPage() {
             <div className="sim-vignette" />
 
             <div className="sim-body">
+                <VMPanel attemptId={attemptId} />
                 <div className="sim-feed" ref={feedRef}>
                     <div className="sim-feed__header">
                         <span className="sim-feed__title">

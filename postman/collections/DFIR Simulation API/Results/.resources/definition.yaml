@@ -1,0 +1,4 @@
+$kind: collection
+name: Results
+description: |-
+  Endpoints for students to view their results and grades.

@@ -1,0 +1,22 @@
+$kind: http-request
+name: Update Response Score
+method: PUT
+url: '{{base_url}}/api/grading/attempts/:attemptId/responses/:responseId'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+pathVariables:
+  - key: attemptId
+    value: '{{attempt_id}}'
+  - key: responseId
+    value: '{{response_id}}'
+body:
+  type: json
+  content: |-
+    {
+      "score": 10,
+      "feedback": "Good work!"
+    }

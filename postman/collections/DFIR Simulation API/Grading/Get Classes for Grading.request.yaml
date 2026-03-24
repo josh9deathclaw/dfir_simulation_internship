@@ -1,0 +1,8 @@
+$kind: http-request
+name: Get Classes for Grading
+method: GET
+url: '{{base_url}}/api/grading/classes'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'

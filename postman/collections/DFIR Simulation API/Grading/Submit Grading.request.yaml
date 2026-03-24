@@ -1,0 +1,11 @@
+$kind: http-request
+name: Submit Grading
+method: POST
+url: '{{base_url}}/api/grading/attempts/:attemptId/submit'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+pathVariables:
+  - key: attemptId
+    value: '{{attempt_id}}'

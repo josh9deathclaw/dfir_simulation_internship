@@ -1,0 +1,11 @@
+$kind: http-request
+name: Complete Attempt
+method: PATCH
+url: '{{base_url}}/api/attempts/:id/complete'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+pathVariables:
+  - key: id
+    value: '{{attempt_id}}'

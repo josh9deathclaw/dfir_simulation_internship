@@ -1,0 +1,5 @@
+$kind: collection
+name: Grading
+description: |-
+  Endpoints for teachers to grade student attempts.
+  Includes viewing submissions and assigning scores.

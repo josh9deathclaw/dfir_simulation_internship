@@ -1,0 +1,5 @@
+$kind: collection
+name: Attempts
+description: |-
+  Endpoints for managing scenario attempts.
+  Students create attempts to start working on scenarios.

@@ -1,0 +1,11 @@
+$kind: http-request
+name: Get Scenario Classes
+method: GET
+url: '{{base_url}}/api/scenarios/:id/classes'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+pathVariables:
+  - key: id
+    value: '{{scenario_id}}'

@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 # Postman environments (ignore secrets)
 *.postman_environment.json
 *.postman_globals.json
+
+# Workspace Folders
+vm-workspaces/

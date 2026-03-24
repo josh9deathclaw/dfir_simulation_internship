@@ -1,0 +1,4 @@
+$kind: collection
+name: Submissions
+description: |-
+  Endpoints for submitting and retrieving student answers.

@@ -1,0 +1,18 @@
+$kind: http-request
+name: Submit Answers
+method: POST
+url: '{{base_url}}/api/submissions'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "attemptId": "{{attempt_id}}",
+      "questionId": "{{question_id}}",
+      "answer": "Student answer here"
+    }

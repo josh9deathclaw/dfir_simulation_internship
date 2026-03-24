@@ -1,0 +1,35 @@
+$kind: http-request
+name: Create Attempt
+method: POST
+url: '{{base_url}}/api/attempts'
+order: 1000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "scenarioId": "{{scenario_id}}",
+      "classId": "{{class_id}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Status code is 201 Created", function () {
+          pm.response.to.have.status(201);
+      });
+
+      pm.test("Response contains attempt data", function () {
+          const jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property("id");
+      });
+
+      // Store attempt ID for subsequent requests
+      if (pm.response.code === 201) {
+          const jsonData = pm.response.json();
+          pm.collectionVariables.set("attempt_id", jsonData.id);
+      }

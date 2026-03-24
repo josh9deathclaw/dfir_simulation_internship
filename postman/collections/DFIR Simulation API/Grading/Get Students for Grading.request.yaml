@@ -1,0 +1,13 @@
+$kind: http-request
+name: Get Students for Grading
+method: GET
+url: '{{base_url}}/api/grading/classes/:classId/scenarios/:scenarioId/students'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+pathVariables:
+  - key: classId
+    value: '{{class_id}}'
+  - key: scenarioId
+    value: '{{scenario_id}}'

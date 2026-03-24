@@ -1,0 +1,11 @@
+$kind: http-request
+name: Get VM Console URL
+method: GET
+url: '{{base_url}}/api/vm/console/:attemptId'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+pathVariables:
+  - key: attemptId
+    value: '{{attempt_id}}'

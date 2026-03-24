@@ -1,0 +1,11 @@
+$kind: http-request
+name: Get Attempt Details
+method: GET
+url: '{{base_url}}/api/results/attempts/:attemptId'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{auth_token}}'
+pathVariables:
+  - key: attemptId
+    value: '{{attempt_id}}'
