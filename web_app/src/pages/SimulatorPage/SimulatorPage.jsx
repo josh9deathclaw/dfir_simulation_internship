@@ -3,6 +3,7 @@ import "./SimulatorPage.css";
 import { useParams, useNavigate } from "react-router-dom";
 import { getToken } from "../../utils/auth";
 import VMPanel from '../SimulatorPage/VMPanel';
+import InvestigationBoard from '../../components/InvestigationBoard/InvestigationBoard';
 // ─── Utility helpers ───────────────────────────────────────────────────────────
 function formatTime(seconds) {
     if (seconds <= 0) return "00:00";
@@ -191,7 +192,7 @@ function SideObjectiveRow({ obj, response, onSubmit }) {
 function BottomBar({
     phase, phaseIndex, totalPhases, timeLeft,
     isTimerFrozen, gatesTotal, gatesDone,
-    onOpenOverview, onOpenNotebook, onOpenEvidence,
+    onOpenOverview, onOpenBoard,
 }) {
     const timerCritical = timeLeft < 120 && !isTimerFrozen;
 
@@ -199,8 +200,7 @@ function BottomBar({
         <div className="sim-bottombar">
             <div className="sim-bottombar__left">
                 <BarIcon label="OVERVIEW" symbol="⊙" onClick={onOpenOverview} />
-                <BarIcon label="NOTEBOOK" symbol="✎" onClick={onOpenNotebook} />
-                <BarIcon label="EVIDENCE" symbol="⊞" onClick={onOpenEvidence} />
+                <BarIcon label="BOARD" symbol="⊞" onClick={onOpenBoard} />
             </div>
 
             <div className="sim-bottombar__centre">
@@ -352,140 +352,9 @@ function PhaseTransitionOverlay({ phase, phaseIndex, onDone }) {
     );
 }
 
-// ─── Evidence Locker ──────────────────────────────────────────────────────────
-function EvidenceLocker({ injects, onClose }) {
-    const [selected,    setSelected]    = useState(null);
-    const [annotations, setAnnotations] = useState({});
+// EvidenceLocker replaced by InvestigationBoard — see InvestigationBoard/
 
-    return (
-        <div className="sim-modal-backdrop" onClick={onClose}>
-            <div className="sim-drawer" onClick={e => e.stopPropagation()}>
-                <div className="sim-drawer__header">
-                    <span className="sim-modal__prompt">&gt; EVIDENCE LOCKER</span>
-                    <button className="sim-modal__close" onClick={onClose}>[X]</button>
-                </div>
-                <div className="sim-drawer__body">
-                    {injects.length === 0 ? (
-                        <div className="sim-drawer__empty">NO EVIDENCE RECEIVED YET</div>
-                    ) : (
-                        <div className="sim-drawer__list">
-                            {injects.map(inj => {
-                                const color = getFileTypeColor(inj.file_type);
-                                return (
-                                    <div
-                                        key={inj.id}
-                                        className={`sim-evidence-row${selected?.id === inj.id ? " sim-evidence-row--active" : ""}`}
-                                        onClick={() => setSelected(selected?.id === inj.id ? null : inj)}
-                                    >
-                                        <span className="sim-evidence-row__badge" style={{ color, borderColor: color }}>
-                                            {inj.file_type || "FILE"}
-                                        </span>
-                                        <span className="sim-evidence-row__name">{inj.title}</span>
-                                        <span className="sim-evidence-row__time">{inj.receivedAt}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {selected && (
-                        <div className="sim-annotation">
-                            <div className="sim-annotation__title">&gt; {selected.title}</div>
-                            <div className="sim-annotation__desc">{selected.description}</div>
-                            <textarea
-                                className="sim-annotation__input"
-                                placeholder="> add analyst notes..."
-                                value={annotations[selected.id] || ""}
-                                onChange={e => setAnnotations(a => ({ ...a, [selected.id]: e.target.value }))}
-                                rows={4}
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Notebook ─────────────────────────────────────────────────────────────────
-function Notebook({ onClose }) {
-    const canvasRef             = useRef(null);
-    const [tool, setTool]       = useState("pen");
-    const [drawing, setDrawing] = useState(false);
-    const lastPos               = useRef(null);
-
-    const getPos = (e, canvas) => {
-        const rect   = canvas.getBoundingClientRect();
-        const scaleX = canvas.width  / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const src    = e.touches ? e.touches[0] : e;
-        return {
-            x: (src.clientX - rect.left) * scaleX,
-            y: (src.clientY - rect.top)  * scaleY,
-        };
-    };
-
-    const startDraw = (e) => {
-        if (!canvasRef.current) return;
-        setDrawing(true);
-        lastPos.current = getPos(e, canvasRef.current);
-    };
-
-    const draw = (e) => {
-        if (!drawing || !canvasRef.current) return;
-        const ctx = canvasRef.current.getContext("2d");
-        const pos = getPos(e, canvasRef.current);
-        ctx.strokeStyle = tool === "eraser" ? "#030710" : "#4cc9f0";
-        ctx.lineWidth   = tool === "eraser" ? 24 : 2;
-        ctx.lineCap     = "round";
-        ctx.lineJoin    = "round";
-        ctx.beginPath();
-        ctx.moveTo(lastPos.current.x, lastPos.current.y);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.stroke();
-        lastPos.current = pos;
-    };
-
-    const stopDraw = () => setDrawing(false);
-
-    const clearCanvas = () => {
-        if (!canvasRef.current) return;
-        const ctx = canvasRef.current.getContext("2d");
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    };
-
-    return (
-        <div className="sim-modal-backdrop" onClick={onClose}>
-            <div className="sim-notebook" onClick={e => e.stopPropagation()}>
-                <div className="sim-notebook__header">
-                    <span className="sim-modal__prompt">&gt; ANALYST NOTEBOOK</span>
-                    <div className="sim-notebook__tools">
-                        <button className={`sim-nb-tool${tool === "pen" ? " sim-nb-tool--active" : ""}`} onClick={() => setTool("pen")}>✎ PEN</button>
-                        <button className={`sim-nb-tool${tool === "eraser" ? " sim-nb-tool--active" : ""}`} onClick={() => setTool("eraser")}>⌫ ERASE</button>
-                        <button className="sim-nb-tool sim-nb-tool--clear" onClick={clearCanvas}>⊘ CLEAR</button>
-                    </div>
-                    <button className="sim-modal__close" onClick={onClose}>[X]</button>
-                </div>
-                <div className="sim-notebook__body">
-                    <canvas
-                        ref={canvasRef}
-                        className="sim-notebook__canvas"
-                        width={1400}
-                        height={760}
-                        onMouseDown={startDraw}
-                        onMouseMove={draw}
-                        onMouseUp={stopDraw}
-                        onMouseLeave={stopDraw}
-                    />
-                    <div className="sim-notebook__grid" />
-                </div>
-                <div className="sim-notebook__footer">
-                    SESSION DATA NOT SAVED — CLOSES ON SCENARIO END
-                </div>
-            </div>
-        </div>
-    );
-}
+// Notebook removed — freehand drawing replaced by Investigation Board
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function SimulatorPage() {
@@ -1035,8 +904,7 @@ export default function SimulatorPage() {
                 gatesTotal={gatesTotal}
                 gatesDone={gatesDone}
                 onOpenOverview={() => setOverlay("overview")}
-                onOpenNotebook={() => setOverlay("notebook")}
-                onOpenEvidence={() => setOverlay("evidence")}
+                onOpenBoard={() => setOverlay("board")}
             />
 
             {overlay === "overview" && (
@@ -1049,13 +917,11 @@ export default function SimulatorPage() {
                 />
             )}
 
-            {overlay === "notebook" && (
-                <Notebook onClose={() => setOverlay(null)} />
-            )}
 
-            {overlay === "evidence" && (
-                <EvidenceLocker
-                    injects={receivedInjects}
+            {overlay === "board" && (
+                <InvestigationBoard
+                    receivedInjects={receivedInjects}
+                    attemptId={attemptId}
                     onClose={() => setOverlay(null)}
                 />
             )}

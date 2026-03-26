@@ -60,8 +60,8 @@ export default function VMPanel({ attemptId, onError }) {
                 }
 
                 attempts++;
-                // Wait 1.5s before polling again
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // Wait 4s before polling again
+                await new Promise(resolve => setTimeout(resolve, 4000));
             }
             throw new Error('VM did not become ready in time');
         } catch (err) {
