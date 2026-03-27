@@ -1,6 +1,119 @@
-@import '../../styles/PageStyles.css';
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACCOUNT PAGE
+   Shared layout comes from PageStyles.css (imported in Account.jsx).
+   This file only contains Account-specific styles — the theme toggle.
+   Uses tokens from tokens.css only. No raw values.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-body {
-    margin: 0.5rem 0 0 0;
-    color: #34495e;
+/* ── Theme toggle section ─────────────────────────────────────────────────── */
+.theme-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.theme-section__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.theme-section__label {
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-cyan);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+.theme-section__sub {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.05em;
+}
+
+/* ── The actual toggle switch ─────────────────────────────────────────────── */
+.theme-toggle {
+    position: relative;
+    width: 56px;
+    height: 28px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.theme-toggle__input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.theme-toggle__track {
+    position: absolute;
+    inset: 0;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-cyan-border);
+    border-radius: 1px;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Track glow when active (dark mode = checked) */
+.theme-toggle__input:checked + .theme-toggle__track {
+    background: var(--color-cyan-subtle);
+    border-color: var(--color-cyan);
+    box-shadow: var(--color-cyan-glow);
+}
+
+/* The sliding knob */
+.theme-toggle__knob {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 18px;
+    height: 18px;
+    background: var(--color-text-secondary);
+    border-radius: 1px;
+    transition: transform 0.2s ease, background 0.2s ease;
+    pointer-events: none;
+}
+
+.theme-toggle__input:checked ~ .theme-toggle__knob {
+    transform: translateX(28px);
+    background: var(--color-cyan);
+}
+
+/* Mode labels inside the track */
+.theme-toggle__track::before {
+    content: 'LT';
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-display);
+    font-size: 0.45rem;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.theme-toggle__track::after {
+    content: 'DK';
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-display);
+    font-size: 0.45rem;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.theme-toggle__input:checked + .theme-toggle__track::after {
+    color: var(--color-cyan);
 }

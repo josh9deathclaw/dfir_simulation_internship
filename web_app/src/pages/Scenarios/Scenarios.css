@@ -1,12 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;700;900&display=swap');
+
+
 
 /* ─── Page ──────────────────────────────────────────────────────────────────── */
 .sc-page {
     min-height: 100vh;
-    background: #080b10;
-    font-family: 'Sora', sans-serif;
+    background: var(--color-bg);
+    font-family: var(--font-mono);
     padding: 40px 48px;
-    color: #fff;
+    color: var(--color-text-primary);
 }
 
 /* ─── Header ────────────────────────────────────────────────────────────────── */
@@ -16,14 +18,6 @@
     align-items: flex-end;
     margin-bottom: 40px;
     animation: sc-fade-up 0.4s ease both;
-}
-.sc-header__eyebrow {
-    font-size: 11px;
-    font-family: 'DM Mono', monospace;
-    color: rgba(255,255,255,0.28);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    margin-bottom: 6px;
 }
 .sc-header__title {
     margin: 0;
@@ -41,8 +35,8 @@
 .sc-filter-group {
     display: flex;
     gap: 4px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: var(--color-bg);
+    border: 1px solid var(--color-bg);
     border-radius: 10px;
     padding: 4px;
 }

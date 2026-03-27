@@ -4,6 +4,9 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+const saved = localStorage.getItem("dfir-theme");
+if (saved === "light") document.documentElement.setAttribute("data-theme", "light");
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>

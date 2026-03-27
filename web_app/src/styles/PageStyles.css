@@ -1,219 +1,287 @@
-/* Shared Page Styling - Simple White Glassy Look */
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHARED PAGE STYLES — Cyberpunk Terminal Theme
+   Used by: Dashboard, Account, AdminPanel (and any other general page)
+   Uses tokens from tokens.css only. No raw values.
 
+   REPLACES: PageStyles.css (delete the old file)
+   IMPORT:   @import '../styles/PageStyles.css'; stays the same in each page,
+             just update the path to point to this file instead.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page shell ───────────────────────────────────────────────────────────── */
 .page-container {
-  min-height: 100vh;
-  padding: 2rem 1rem;
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(200, 210, 230, 0.3) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(210, 215, 235, 0.25) 0%, transparent 55%),
-    #eef0f5;
+    min-height: calc(100vh - 56px);  /* 56px = navbar height */
+    background: var(--color-bg);
+    font-family: var(--font-mono);
+    color: var(--color-text-primary);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Scanline overlay — same as all terminal pages */
+.page-container::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent, transparent 2px,
+        var(--scanline-color) 2px, var(--scanline-color) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
 }
 
 .page-wrapper {
-  max-width: 1000px;
-  margin: 0 auto;
+    max-width: 1000px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+    position: relative;
+    z-index: 1;
 }
 
-.page-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.04),
-    0 8px 32px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-  margin-bottom: 2rem;
-}
-
+/* ── Page header ──────────────────────────────────────────────────────────── */
 .page-header {
-  text-align: center;
-  margin-bottom: 2rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--color-cyan-border2);
+    position: relative;
+}
+
+/* Cyan gradient underline on the header */
+.page-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, var(--color-cyan-dim), transparent);
 }
 
 .page-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1a1a2e;
-  margin: 0;
-  letter-spacing: -0.02em;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--color-cyan);
+    margin: 0 0 0.35rem 0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px var(--color-cyan-dim);
+}
+
+/* Terminal prompt prefix — add data-prompt=">" to your h1 element,
+   or just keep it as plain text. The style handles the glow. */
+.page-header__prompt {
+    color: var(--color-cyan);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    opacity: 0.7;
+    margin-right: 0.5rem;
 }
 
 .page-header p {
-  color: #9a9db0;
-  font-size: 1.1rem;
-  margin: 0.5rem 0 0 0;
-  line-height: 1.5;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    margin: 0;
+    line-height: 1.6;
 }
 
+/* ── Cards / panels ───────────────────────────────────────────────────────── */
+.page-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-cyan-border2);
+    border-radius: 2px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Left accent bar on cards */
+.page-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--color-cyan), transparent);
+}
+
+/* ── Page content typography ──────────────────────────────────────────────── */
 .page-content {
-  color: #1a1a2e;
-  line-height: 1.6;
+    color: var(--color-text-primary);
+    line-height: 1.6;
 }
 
 .page-content h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 0 0 1rem 0;
-  letter-spacing: -0.01em;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-cyan);
+    margin: 0 0 1rem 0;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
 }
 
 .page-content h3 {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 1.5rem 0 0.5rem 0;
-  letter-spacing: -0.01em;
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-cyan-dim);
+    margin: 1.5rem 0 0.5rem 0;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 .page-content p {
-  font-size: 1rem;
-  color: #4a5568;
-  margin: 0.5rem 0;
-  line-height: 1.6;
+    font-size: 0.85rem;
+    color: var(--color-text-primary);
+    margin: 0.4rem 0;
+    line-height: 1.7;
+    letter-spacing: 0.02em;
 }
 
-/* Role-specific content sections */
-.role-specific-content {
-  background: rgba(240, 242, 248, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin: 1.5rem 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.role-specific-content h3 {
-  margin: 0 0 0.5rem 0;
-  color: #1a1a2e;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-/* User details/info sections */
+/* ── Info sections (user-details, account-info, role-specific) ────────────── */
 .user-details,
-.account-info {
-  background: rgba(240, 242, 248, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin: 1.5rem 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+.account-info,
+.role-specific-content {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-cyan-border2);
+    border-left: 2px solid var(--color-cyan-border);
+    border-radius: 0 2px 2px 0;
+    padding: 1.25rem 1.5rem;
+    margin: 1.25rem 0;
 }
 
 .user-details h2,
 .account-info h2 {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-cyan);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin: 0 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-cyan-border2);
 }
 
 .user-details p,
 .account-info p {
-  font-size: 0.95rem;
-  color: #4a5568;
-  margin: 0.5rem 0;
-  line-height: 1.5;
+    font-size: 0.82rem;
+    color: var(--color-text-primary);
+    margin: 0.35rem 0;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
 }
 
-/* Role text styling */
+.role-specific-content h3 {
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-cyan-dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 0.5rem 0;
+}
+
+/* ── Role badges (used on Account / Profile pages) ────────────────────────── */
 .role-text {
-  font-weight: 600;
-  text-transform: capitalize;
-  padding: 0.25rem 0.6rem;
-  border-radius: 1rem;
-  font-size: 0.85rem;
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.6rem;
+    border-radius: 1px;
+    border: 1px solid currentColor;
 }
 
 .role-student {
-  color: #27ae60;
-  background: rgba(39, 174, 96, 0.1);
-  border: 1px solid rgba(39, 174, 96, 0.2);
+    color: var(--color-green);
+    background: var(--color-green-subtle);
+    border-color: var(--color-green-dim);
 }
 
 .role-teacher {
-  color: #e67e22;
-  background: rgba(230, 126, 34, 0.1);
-  border: 1px solid rgba(230, 126, 34, 0.2);
+    color: var(--color-amber);
+    background: var(--color-amber-subtle);
+    border-color: var(--color-amber-dim);
 }
 
 .role-admin {
-  color: #9b59b6;
-  background: rgba(155, 89, 182, 0.1);
-  border: 1px solid rgba(155, 89, 182, 0.2);
+    color: var(--color-cyan);
+    background: var(--color-cyan-subtle);
+    border-color: var(--color-cyan-border);
 }
 
-/* Admin tools grid */
+/* ── Admin tools grid ─────────────────────────────────────────────────────── */
 .admin-tools {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.25rem;
 }
 
 .admin-section,
 .grading-section {
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-cyan-border2);
+    border-left: 2px solid var(--color-cyan-border);
+    border-radius: 0 2px 2px 0;
+    padding: 1.25rem;
+    transition: border-left-color 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+    overflow: hidden;
 }
 
 .admin-section:hover,
 .grading-section:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+    border-left-color: var(--color-cyan);
+    box-shadow: var(--color-cyan-glow);
 }
 
 .admin-section h4,
 .grading-section h4 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 0 0 0.5rem 0;
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-cyan);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin: 0 0 0.5rem 0;
 }
 
 .admin-section p,
 .grading-section p {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin: 0;
-  line-height: 1.5;
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
 }
 
-/* Grading tools specific */
+/* ── Grading tools ────────────────────────────────────────────────────────── */
 .grading-tools {
-  margin-top: 1rem;
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
 }
 
-.grading-tools .grading-section {
-  margin-bottom: 1rem;
-}
-
-/* Responsive adjustments */
+/* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .page-container {
-    padding: 1rem 0.5rem;
-  }
+    .page-wrapper {
+        padding: 1.25rem 1rem 2rem;
+    }
 
-  .page-card {
-    padding: 1.5rem;
-    border-radius: 16px;
-  }
+    .page-header h1 {
+        font-size: 1.1rem;
+    }
 
-  .page-header h1 {
-    font-size: 2rem;
-  }
-
-  .admin-tools {
-    grid-template-columns: 1fr;
-  }
+    .admin-tools {
+        grid-template-columns: 1fr;
+    }
 }

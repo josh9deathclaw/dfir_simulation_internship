@@ -1,121 +1,124 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   DASHBOARD
+   Shared layout comes from PageStyles.css.
+   This file only contains Dashboard-specific classes.
+   Uses tokens from tokens.css only. No raw values.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @import '../../styles/PageStyles.css';
 
-.page-container {
-  min-height: 100vh;
-  padding: 2rem 1rem;
-  background:
-    radial-gradient(ellipse at 20% 50%, rgba(200, 210, 230, 0.3) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(210, 215, 235, 0.25) 0%, transparent 55%),
-    #eef0f5;
+/* ── Blink cursor ─────────────────────────────────────────────────────────── */
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+}
+.dashboard-blink { animation: blink 1s step-end infinite; }
+
+/* ── Quick-action buttons (e.g. "Start Simulation", "View Results") ───────── */
+.dashboard-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
 }
 
-.page-wrapper {
-  max-width: 1000px;
-  margin: 0 auto;
+.dashboard-action-btn {
+    background: transparent;
+    border: 1px solid var(--color-cyan-border);
+    border-left: 2px solid var(--color-cyan);
+    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    padding: 0.65rem 1rem;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 0 2px 2px 0;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    text-decoration: none;
 }
 
-.page-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.04),
-    0 8px 32px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
-  margin-bottom: 2rem;
+.dashboard-action-btn:hover {
+    background: var(--color-cyan-subtle);
+    border-left-color: var(--color-cyan);
+    color: var(--color-cyan);
+    box-shadow: var(--color-cyan-glow);
 }
 
-.page-header {
-  text-align: center;
-  margin-bottom: 2rem;
+.dashboard-action-btn__arrow {
+    margin-left: auto;
+    color: var(--color-cyan-dim);
+    font-size: 0.75rem;
+    transition: transform 0.15s ease;
 }
 
-.page-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #1a1a2e;
-  margin: 0;
-  letter-spacing: -0.02em;
+.dashboard-action-btn:hover .dashboard-action-btn__arrow {
+    transform: translateX(3px);
+    color: var(--color-cyan);
 }
 
-.page-header p {
-  color: #9a9db0;
-  font-size: 1.1rem;
-  margin: 0.5rem 0 0 0;
-  line-height: 1.5;
+/* ── Stat readouts (e.g. attempts completed, score average) ───────────────── */
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
 }
 
-.page-content {
-  color: #1a1a2e;
-  line-height: 1.6;
+.dashboard-stat {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-cyan-border2);
+    padding: 0.9rem 1rem;
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
-.page-content h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 0 0 1rem 0;
-  letter-spacing: -0.01em;
+.dashboard-stat__num {
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--color-cyan);
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 16px var(--color-cyan-dim);
+    line-height: 1;
 }
 
-.page-content p {
-  font-size: 1rem;
-  color: #4a5568;
-  margin: 0.5rem 0;
-  line-height: 1.6;
+.dashboard-stat__label {
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-top: 0.1rem;
 }
 
-.user-details {
-  background: rgba(240, 242, 248, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin: 1.5rem 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+/* ── Status / notice banners ──────────────────────────────────────────────── */
+.dashboard-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-cyan-border2);
+    border-left: 2px solid var(--color-cyan-dim);
+    border-radius: 0 2px 2px 0;
+    font-size: 0.8rem;
+    color: var(--color-text-primary);
+    letter-spacing: 0.03em;
+    line-height: 1.6;
 }
 
-.user-details p {
-  margin: 0.5rem 0;
-  font-size: 0.95rem;
-  color: #4a5568;
-  line-height: 1.5;
+.dashboard-notice--warn {
+    border-left-color: var(--color-amber);
+    color: var(--color-amber);
 }
 
-.role-specific-content {
-  background: rgba(240, 242, 248, 0.8);
-  border: 1px solid rgba(0, 0, 0, 0.07);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin: 1.5rem 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.role-specific-content h3 {
-  margin: 0 0 0.5rem 0;
-  color: #1a1a2e;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.role-specific-content p {
-  margin: 0.5rem 0 0 0;
-  color: #34495e;
-}
-
-@media (max-width: 768px) {
-  .page-container {
-    padding: 1rem 0.5rem;
-  }
-
-  .page-card {
-    padding: 1.5rem;
-    border-radius: 16px;
-  }
-
-  .page-header h1 {
-    font-size: 2rem;
-  }
+.dashboard-notice--error {
+    border-left-color: var(--color-red);
+    color: var(--color-red);
 }

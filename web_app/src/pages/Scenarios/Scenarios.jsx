@@ -532,12 +532,8 @@ export default function Scenarios() {
                 {/* ── Header ── */}
                 <div className="sc-header">
                     <div className="sc-header__left">
-                        <div className="sc-header__eyebrow">
-                            {userRole === "teacher" ? "Instructor Portal" : "Student Portal"}
-                        </div>
                         <h1 className="sc-header__title">Scenarios</h1>
                     </div>
-
                     <div className="sc-header__right">
                         <div className="sc-filter-group">
                             {FILTERS.map((f) => (

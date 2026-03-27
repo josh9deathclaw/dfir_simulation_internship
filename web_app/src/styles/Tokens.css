@@ -1,0 +1,135 @@
+/* Design Tokens 
+    Fonts
+    Dark Mode - default, cyberpunk inspired
+    Light Mode - [data-theme="light"]
+*/
+
+/* Import Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;600;700;900&family=Sora:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+    /* Fonts */
+    --font-mono:    'Share Tech Mono', 'Courier New', monospace;
+    --font-display: 'Orbitron', monospace;
+    --font-ui:      'Sora', sans-serif;
+    --font-ui-mono: 'DM Mono', monospace;
+
+    /* Backgrounds */
+    --color-bg:             #040810;  /* page background, canvas floor         */
+    --color-surface:        #070d1a;  /* cards, panels, feed background        */
+    --color-surface-raised: #0a1020;  /* nested panels, modal footers          */
+    --color-overlay:        rgba(4, 10, 20, 0.95);  /* header bars, HUD chrome */
+    --color-backdrop:       rgba(4, 8, 16, 0.60);   /* modal backdrop blur     */
+    --color-inset:          rgba(0, 0, 0, 0.25);    /* answer blocks, q-items  */
+    --color-inset-deep:     rgba(0, 0, 0, 0.40);    /* score inputs, textareas */
+
+    /* Primary Accent - Cyan */
+    --color-cyan:         #4cc9f0;
+    --color-cyan-dim:     rgba(76, 201, 240, 0.50);
+    --color-cyan-border:  rgba(76, 201, 240, 0.15);  /* standard panel border  */
+    --color-cyan-border2: rgba(76, 201, 240, 0.08);  /* subtle inner border    */
+    --color-cyan-subtle:  rgba(76, 201, 240, 0.06);  /* hover backgrounds      */
+    --color-cyan-glow:    0 0 16px rgba(76, 201, 240, 0.10);
+    --color-cyan-glow-lg: 0 0 24px rgba(76, 201, 240, 0.20);
+
+    /* Status: Green */
+    --color-green:        #39ff14;
+    --color-green-dim:    rgba(57, 255, 20, 0.50);
+    --color-green-subtle: rgba(57, 255, 20, 0.06);
+
+    /* Status: Red */
+    --color-red:          #e63946;
+    --color-red-dim:      rgba(230, 57, 70, 0.40);
+    --color-red-subtle:   rgba(230, 57, 70, 0.05);
+
+    /* -----------------Investigation Board ---------------*/
+    /* Red Thread */
+    --color-thread:         #ff003c;
+    --color-thread-light:   #ff6b6b;
+    --color-thread-dim:     rgba(255, 0, 60, 0.35);
+    --color-thread-subtle:  rgba(255, 0, 60, 0.08);
+    --color-thread-glow:    0 0 10px rgba(255, 0, 60, 0.30);
+    --color-thread-glow-lg: 0 0 20px rgba(255, 0, 60, 0.15);
+    /* Annotation Yellow */
+    --color-annotation:        rgba(255, 214, 0, 0.60);
+    --color-annotation-hover:  rgba(255, 214, 0, 0.80);
+    --color-annotation-subtle: rgba(255, 214, 0, 0.05);
+    --color-annotation-border: rgba(255, 214, 0, 0.25);
+
+    /* Text */
+    --color-text-bright:    #ffffff;                    /* names, card titles  */
+    --color-text-primary:   rgba(180, 220, 240, 0.85);  /* main body text      */
+    --color-text-secondary: rgba(120, 160, 180, 0.45);  /* labels, metadata    */
+    --color-text-ghost:     rgba(76, 201, 240, 0.20);   /* empty state hints */
+
+    /* Borders */
+    --color-border-ghost: rgba(255, 255, 255, 0.10);  /* cancel btns, dividers */
+    --color-border-input: rgba(255, 255, 255, 0.09);  /* form inputs           */
+
+    /* Shadows */
+    --scanline-color:  rgba(0, 0, 0, 0.08);          /* all pages             */
+    --scanline-thread: rgba(255, 0, 60, 0.015);      /* board only            */
+}
+
+/* Light Mode Overrides */
+[data-theme="light"] {
+    /* Backgrounds */
+    --color-bg:             #eef0f5;
+    --color-surface:        rgba(255, 255, 255, 0.80);
+    --color-surface-raised: #f0f2f8;
+    --color-overlay:        rgba(240, 242, 248, 0.95);
+    --color-backdrop:       rgba(200, 205, 220, 0.60);
+    --color-inset:          rgba(0, 0, 0, 0.04);
+    --color-inset-deep:     rgba(0, 0, 0, 0.06);
+
+    /* ── Primary Accent — Cyan */
+    --color-cyan:         #0a9fc2;
+    --color-cyan-dim:     rgba(10, 159, 194, 0.50);
+    --color-cyan-border:  rgba(10, 159, 194, 0.20);
+    --color-cyan-border2: rgba(10, 159, 194, 0.10);
+    --color-cyan-subtle:  rgba(10, 159, 194, 0.07);
+    --color-cyan-glow:    0 0 16px rgba(10, 159, 194, 0.10);
+    --color-cyan-glow-lg: 0 0 24px rgba(10, 159, 194, 0.18);
+
+    /* Status */
+    --color-green:        #1a9e00;
+    --color-green-dim:    rgba(26, 158, 0, 0.40);
+    --color-green-subtle: rgba(26, 158, 0, 0.06);
+    
+    --color-amber:        #c4621a;
+    --color-amber-dim:    rgba(196, 98, 26, 0.35);
+    --color-amber-subtle: rgba(196, 98, 26, 0.06);
+    
+    --color-red:          #c0222e;
+    --color-red-dim:      rgba(192, 34, 46, 0.35);
+    --color-red-subtle:   rgba(192, 34, 46, 0.05);
+
+    /* Investigation Board */
+    --color-thread:         #cc0030;
+    --color-thread-light:   #e05050;
+    --color-thread-dim:     rgba(204, 0, 48, 0.30);
+    --color-thread-subtle:  rgba(204, 0, 48, 0.07);
+    --color-thread-glow:    0 0 10px rgba(204, 0, 48, 0.18);
+    --color-thread-glow-lg: 0 0 20px rgba(204, 0, 48, 0.10);
+    
+    --color-annotation:        rgba(160, 120, 0, 0.80);
+    --color-annotation-hover:  rgba(160, 120, 0, 1.00);
+    --color-annotation-subtle: rgba(160, 120, 0, 0.05);
+    --color-annotation-border: rgba(160, 120, 0, 0.20);
+
+    /* Text */
+    --color-text-bright:    #0a0f1a;
+    --color-text-primary:   rgba(20, 30, 50, 0.85);
+    --color-text-secondary: rgba(40, 60, 90, 0.55);
+    --color-text-ghost:     rgba(10, 159, 194, 0.30);
+
+    /* Borders */
+    --color-border-ghost: rgba(0, 0, 0, 0.10);
+    --color-border-input: rgba(0, 0, 0, 0.09);
+
+    /* Decorative */
+    --scanline-color:  rgba(0, 0, 0, 0.03);
+    --scanline-thread: rgba(0, 0, 60, 0.015);
+}
+
+
