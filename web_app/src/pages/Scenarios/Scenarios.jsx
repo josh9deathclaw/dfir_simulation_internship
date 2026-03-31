@@ -12,19 +12,31 @@ const DIFFICULTY_CONFIG = {
     hard:   { label: "Hard",   color: "#e63946" },
 };
 
+// Each entry now has:
+//   accent      — the vivid colour used for glows, borders, topline (same in both modes)
+//   coverDark   — deep dark background for dark mode
+//   coverLight  — soft pastel background for light mode
 const ACCENT_PALETTE = [
-    { accent: "#e63946", cover: "#0f1923" },
-    { accent: "#f4a261", cover: "#0d1b2a" },
-    { accent: "#7b2fff", cover: "#1a0a2e" },
-    { accent: "#52b788", cover: "#0a1f0a" },
-    { accent: "#ffd166", cover: "#1a1200" },
-    { accent: "#4cc9f0", cover: "#001a2c" },
-    { accent: "#f72585", cover: "#1a0011" },
+    { accent: "#e63946", coverDark: "#0f1923", coverLight: "#fce8ea" },
+    { accent: "#f4a261", coverDark: "#0d1b2a", coverLight: "#fef0e6" },
+    { accent: "#7b2fff", coverDark: "#1a0a2e", coverLight: "#ede8ff" },
+    { accent: "#52b788", coverDark: "#0a1f0a", coverLight: "#e6f5ed" },
+    { accent: "#ffd166", coverDark: "#1a1200", coverLight: "#fef9e6" },
+    { accent: "#4cc9f0", coverDark: "#001a2c", coverLight: "#e6f7fd" },
+    { accent: "#f72585", coverDark: "#1a0011", coverLight: "#fde6f2" },
 ];
 
 function getColorsFromId(id = "") {
     const sum = id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
     return ACCENT_PALETTE[sum % ACCENT_PALETTE.length];
+}
+
+// Reads the current theme from <html data-theme="...">
+// Returns "light" or "dark"
+function getCurrentTheme() {
+    return document.documentElement.getAttribute("data-theme") === "light"
+        ? "light"
+        : "dark";
 }
 
 function formatTime(mins) {
@@ -40,7 +52,7 @@ function JoinClassModal({ onClose, onJoined }) {
     const [code,    setCode]    = useState("");
     const [error,   setError]   = useState("");
     const [loading, setLoading] = useState(false);
-    const [success, setSuccess] = useState(null); // { className }
+    const [success, setSuccess] = useState(null);
     const token = getToken();
 
     useEffect(() => {
@@ -71,7 +83,7 @@ function JoinClassModal({ onClose, onJoined }) {
             if (!res.ok) { setError(data.message || "Failed to join class."); return; }
 
             setSuccess({ className: data.class_name });
-            onJoined(); // triggers scenario re-fetch in parent
+            onJoined();
         } catch {
             setError("Network error. Please try again.");
         } finally {
@@ -99,7 +111,6 @@ function JoinClassModal({ onClose, onJoined }) {
 
                 <div className="sc-modal__body">
                     {success ? (
-                        // ── Success state ──
                         <div className="sc-join-success">
                             <div className="sc-join-success__icon">✓</div>
                             <div className="sc-join-success__title">Enrolled successfully</div>
@@ -112,7 +123,6 @@ function JoinClassModal({ onClose, onJoined }) {
                             </button>
                         </div>
                     ) : (
-                        // ── Input state ──
                         <>
                             <div className="sc-join-input-wrap">
                                 <input
@@ -158,20 +168,38 @@ function JoinClassModal({ onClose, onJoined }) {
 // ─── Scenario Card ─────────────────────────────────────────────────────────────
 function ScenarioCard({ scenario, userId, userRole, onClick }) {
     const [hovered, setHovered] = useState(false);
+
+    // Re-render when theme changes so cover colour updates instantly
+    const [theme, setTheme] = useState(getCurrentTheme);
+    useEffect(() => {
+        const observer = new MutationObserver(() => setTheme(getCurrentTheme()));
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+        return () => observer.disconnect();
+    }, []);
+
     const isOwner = scenario.created_by === userId;
     const diff    = DIFFICULTY_CONFIG[scenario.difficulty];
     const colors  = getColorsFromId(scenario.id);
     const time    = formatTime(scenario.estimated_time_minutes);
 
+    // Pick cover colour based on current theme
+    const cover = theme === "light" ? colors.coverLight : colors.coverDark;
+
+    // In light mode, text sits on a pale pastel so needs to be dark
+    const titleColor  = theme === "light" ? "rgba(10, 15, 30, 0.90)" : "#ffffff";
+    const metaColor   = theme === "light" ? "rgba(10, 15, 30, 0.50)" : "rgba(255,255,255,0.38)";
+
     return (
         <div
             className={`sc-card${hovered ? " sc-card--hovered" : ""}`}
             style={{
-                background:  colors.cover,
-                borderColor: hovered ? `${colors.accent}55` : "rgba(255,255,255,0.06)",
+                background:  cover,
+                borderColor: hovered ? `${colors.accent}55` : (theme === "light" ? `${colors.accent}30` : "rgba(255,255,255,0.06)"),
                 boxShadow:   hovered
                     ? `0 20px 60px ${colors.accent}30, 0 0 0 1px ${colors.accent}22`
-                    : "0 4px 20px rgba(0,0,0,0.4)",
+                    : theme === "light"
+                        ? `0 4px 20px ${colors.accent}18`
+                        : "0 4px 20px rgba(0,0,0,0.4)",
             }}
             onClick={() => onClick({ ...scenario, accentColor: colors.accent })}
             onMouseEnter={() => setHovered(true)}
@@ -184,8 +212,11 @@ function ScenarioCard({ scenario, userId, userRole, onClick }) {
                                  radial-gradient(ellipse at 20% 80%, ${colors.accent}11 0%, transparent 50%)`,
                 }}
             />
-            <div className="sc-card__fade" />
-            <div className="sc-card__topline" style={{ background: colors.accent, opacity: hovered ? 1 : 0.5 }} />
+
+            {/* In light mode skip the dark fade-to-black gradient — it looks wrong on pastels */}
+            {theme === "dark" && <div className="sc-card__fade" />}
+
+            <div className="sc-card__topline" style={{ background: colors.accent, opacity: hovered ? 1 : 0.6 }} />
 
             <div className="sc-card__badges">
                 {userRole === "teacher" && isOwner && (
@@ -197,7 +228,9 @@ function ScenarioCard({ scenario, userId, userRole, onClick }) {
             </div>
 
             <div className="sc-card__content">
-                <h3 className="sc-card__title">{scenario.title}</h3>
+                <h3 className="sc-card__title" style={{ color: titleColor }}>
+                    {scenario.title}
+                </h3>
                 <div className="sc-card__meta">
                     {diff && (
                         <span className="sc-meta-item" style={{ color: diff.color }}>
@@ -206,10 +239,10 @@ function ScenarioCard({ scenario, userId, userRole, onClick }) {
                         </span>
                     )}
                     {time && (
-                        <span className="sc-meta-item sc-meta-item--muted">⏱ {time}</span>
+                        <span className="sc-meta-item" style={{ color: metaColor }}>⏱ {time}</span>
                     )}
                     {scenario.attempt_count > 0 && (
-                        <span className="sc-meta-item sc-meta-item--muted">
+                        <span className="sc-meta-item" style={{ color: metaColor }}>
                             {scenario.attempt_count} attempts
                         </span>
                     )}
@@ -286,11 +319,11 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
         try {
             const res = await fetch(
                 API(`/scenarios/${scenario.id}/publish`),
-                { 
-                    method: "PATCH", 
-                    headers: { 
+                {
+                    method: "PATCH",
+                    headers: {
                         "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}` 
+                        Authorization: `Bearer ${token}`
                     },
                     body: JSON.stringify({ is_published: true })
                 }
@@ -299,7 +332,7 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
             const { is_published } = await res.json();
             onPublishToggle(scenario.id, is_published);
         } catch {
-            // fail silently — could add an error state here later
+            // fail silently
         } finally {
             setPublishing(false);
         }
@@ -396,7 +429,6 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
                                         onClick={() => navigate(`/simulatorpage/${scenario.id}`)}
                                     >
                                         Start Scenario →
-
                                     </button>
                                 )}
                                 {userRole === "teacher" && isOwner && (
@@ -409,9 +441,10 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
                                             Edit Scenario
                                         </button>
                                         {!scenario.is_published && (
-                                            <button className="sc-btn sc-btn--ghost" 
+                                            <button
+                                                className="sc-btn sc-btn--ghost"
                                                 onClick={handlePublishToggle}
-                                                disabled={publishing}   
+                                                disabled={publishing}
                                             >
                                                 {publishing ? "Publishing…" : "Publish"}
                                             </button>
@@ -452,14 +485,14 @@ export default function Scenarios() {
     const userRole = user?.role || "student";
     const token    = getToken();
 
-    const [scenarios,  setScenarios]  = useState([]);
-    const [loading,    setLoading]    = useState(true);
-    const [error,      setError]      = useState(null);
-    const [selected,   setSelected]   = useState(null);
-    const [filter,     setFilter]     = useState("all");
-    const [showJoin,   setShowJoin]   = useState(false);
+    const [scenarios,     setScenarios]     = useState([]);
+    const [loading,       setLoading]       = useState(true);
+    const [error,         setError]         = useState(null);
+    const [selected,      setSelected]      = useState(null);
+    const [filter,        setFilter]        = useState("all");
+    const [showJoin,      setShowJoin]      = useState(false);
     const [selectedClass, setSelectedClass] = useState("all");
-    const [classes, setClasses] = useState([]);
+    const [classes,       setClasses]       = useState([]);
 
     const FILTERS = ["all", "easy", "medium", "hard"];
 
@@ -493,8 +526,8 @@ export default function Scenarios() {
             .catch(() => { setClasses([]); });
     }, [token]);
 
-    useEffect(() => { 
-        fetchScenarios(); 
+    useEffect(() => {
+        fetchScenarios();
         fetchClasses();
     }, [fetchScenarios, fetchClasses]);
 
@@ -503,9 +536,7 @@ export default function Scenarios() {
     );
 
     const myScenarios        = userRole === "teacher" ? visible.filter((s) => s.created_by === userId) : [];
-    const allScenariosSection = visible; // teachers see everything, students see their enrolled+published
-    // For teachers "all scenarios" = everything (including their own).
-    // For students it's just their visible scenarios.
+    const allScenariosSection = visible;
 
     const classFiltered = allScenariosSection.filter(
         (s) => selectedClass === "all" || (s.class_names || []).includes(selectedClass)
@@ -516,7 +547,6 @@ export default function Scenarios() {
     };
 
     const handlePublishToggle = (scenarioId, newPublishedState) => {
-        // Update local state so the card and modal both reflect the change immediately
         setScenarios((prev) =>
             prev.map((s) => s.id === scenarioId ? { ...s, is_published: newPublishedState } : s)
         );
@@ -549,9 +579,9 @@ export default function Scenarios() {
                         </div>
 
                         {uniqueClasses.length > 0 && (
-                            <select 
-                                value={selectedClass} 
-                                onChange={(e) => setSelectedClass(e.target.value)} 
+                            <select
+                                value={selectedClass}
+                                onChange={(e) => setSelectedClass(e.target.value)}
                                 className="sc-class-select"
                             >
                                 <option value="all">All Classes</option>
@@ -561,19 +591,14 @@ export default function Scenarios() {
                             </select>
                         )}
 
-                        {/* Teacher: create button */}
                         {userRole === "teacher" && (
                             <button className="sc-btn sc-btn--create" onClick={() => navigate("/create-scenario")}>
                                 + Create Scenario
                             </button>
                         )}
 
-                        {/* Student: join class button */}
                         {userRole === "student" && (
-                            <button
-                                className="sc-btn sc-btn--join"
-                                onClick={() => setShowJoin(true)}
-                            >
+                            <button className="sc-btn sc-btn--join" onClick={() => setShowJoin(true)}>
                                 + Join Class
                             </button>
                         )}
@@ -586,7 +611,6 @@ export default function Scenarios() {
 
                 {!loading && !error && (
                     <>
-                        {/* Teacher: own scenarios */}
                         {userRole === "teacher" && myScenarios.length > 0 && (
                             <section className="sc-section sc-section--delay1">
                                 <SectionLabel label="Your Scenarios" count={myScenarios.length} />
@@ -598,7 +622,6 @@ export default function Scenarios() {
                             </section>
                         )}
 
-                        {/* All other / enrolled scenarios */}
                         <section className="sc-section sc-section--delay2">
                             <SectionLabel
                                 label={userRole === "teacher" ? "All Scenarios" : "Your Scenarios"}
@@ -611,7 +634,6 @@ export default function Scenarios() {
                                     ))}
                                 </div>
                             ) : (
-                                /* ── Empty states ── */
                                 selectedClass !== "all" ? (
                                     <div className="sc-placeholder">No scenarios in this class.</div>
                                 ) : userRole === "student" ? (
@@ -638,7 +660,6 @@ export default function Scenarios() {
                 )}
             </div>
 
-            {/* ── Modals ── */}
             {selected && (
                 <ScenarioModal
                     scenario={selected}
@@ -656,8 +677,8 @@ export default function Scenarios() {
                     onClose={() => setShowJoin(false)}
                     onJoined={() => {
                         setShowJoin(false);
-                        fetchScenarios(); // re-fetch so new scenarios appear
-                        fetchClasses(); // re-fetch classes to include the new one
+                        fetchScenarios();
+                        fetchClasses();
                     }}
                 />
             )}
