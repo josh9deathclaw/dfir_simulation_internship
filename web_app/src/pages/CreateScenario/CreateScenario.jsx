@@ -393,7 +393,7 @@ export default function CreateScenario() {
     const [scenarioLevel, setScenarioLevel] = useState({ injects: [], objectives: [], questions: [] });
 
     useEffect(() => {
-        fetch(`${API}/classes`, {
+        fetch(API('/classes'), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => r.json())
@@ -424,7 +424,7 @@ export default function CreateScenario() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${API}/scenarios`, {
+            const res = await fetch(API('/scenarios'), {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(buildPayload({ details, phases, scenarioLevel })),

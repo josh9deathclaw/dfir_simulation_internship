@@ -438,10 +438,10 @@ export default function EditScenario() {
         const headers = { Authorization: `Bearer ${token}` };
 
         Promise.all([
-            fetch(`${API}/scenarios/${scenarioId}/full`, { headers }),
-            fetch(`${API}/classes`, { headers }),
+            fetch(API(`/scenarios/${scenarioId}/full`), { headers }),
+            fetch(API('/classes'), { headers }),
             // Fetch class associations for this scenario so we can pre-check them
-            fetch(`${API}/scenarios/${scenarioId}/classes`, { headers }),
+            fetch(API(`/scenarios/${scenarioId}/classes`), { headers }),
         ])
             .then(async ([scenRes, classRes, scClassRes]) => {
                 if (!scenRes.ok) throw new Error("Scenario not found or access denied.");
@@ -491,7 +491,7 @@ export default function EditScenario() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${API}/scenarios/${scenarioId}`, {
+            const res = await fetch(API(`/scenarios/${scenarioId}`), {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(buildPayload({ details, phases, scenarioLevel })),

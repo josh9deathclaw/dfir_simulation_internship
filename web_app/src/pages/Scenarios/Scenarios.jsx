@@ -58,7 +58,7 @@ function JoinClassModal({ onClose, onJoined }) {
         setError("");
 
         try {
-            const res = await fetch(`${API}/classes/join`, {
+            const res = await fetch(API(`/classes/join`), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -227,7 +227,7 @@ function StudentsTab({ scenarioId, accentColor }) {
     const token = getToken();
 
     useEffect(() => {
-        fetch(`${API}/scenarios/${scenarioId}/students`, {
+        fetch(API(`/scenarios/${scenarioId}/students`), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => r.json())
@@ -285,7 +285,7 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
         setPublishing(true);
         try {
             const res = await fetch(
-                `${API}/scenarios/${scenario.id}/publish`,
+                API(`/scenarios/${scenario.id}/publish`),
                 { 
                     method: "PATCH", 
                     headers: { 
@@ -473,7 +473,7 @@ export default function Scenarios() {
 
     const fetchScenarios = useCallback(() => {
         setLoading(true);
-        fetch(`${API}/scenarios`, {
+        fetch(API('/scenarios'), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => {
@@ -485,7 +485,7 @@ export default function Scenarios() {
     }, [token]);
 
     const fetchClasses = useCallback(() => {
-        fetch(`${API}/classes`, {
+        fetch(API('/classes'), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => r.ok ? r.json() : [])

@@ -425,7 +425,7 @@ export default function SimulatorPage() {
             try {
                 // ── 1. Load all scenario data ──────────────────────────────────
                 const res = await fetch(
-                    `${API}/scenarios/${scenarioId}/full`,
+                    API(`/scenarios/${scenarioId}/full`),
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`Failed to load scenario (${res.status})`);
@@ -446,7 +446,7 @@ export default function SimulatorPage() {
                 // resumed: true means a previous active attempt was found and
                 // returned instead of creating a duplicate — handles page refresh.
                 const attemptRes = await fetch(
-                    `${API}/attempts`,
+                    API(`/attempts`),
                     {
                         method: "POST",
                         headers: {
@@ -481,7 +481,7 @@ export default function SimulatorPage() {
         async function startVM() {
             try {
                 const statusRes = await fetch(
-                    `${API}/vm/status/${attemptId}`,
+                    API(`/vm/status/${attemptId}`),
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 const statusData = await statusRes.json();
@@ -492,7 +492,7 @@ export default function SimulatorPage() {
                 }
 
                 const vmRes = await fetch(
-                    `${API}/vm/start`,
+                    API(`/vm/start`),
                     {
                         method: "POST",
                         headers: {
@@ -636,7 +636,7 @@ export default function SimulatorPage() {
                         file_name: inj.file_name
                     });
 
-                    fetch(`${API}/vm/inject/${attemptId}`, {
+                    fetch(API(`/vm/inject/${attemptId}`), {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -682,7 +682,7 @@ export default function SimulatorPage() {
         if (!attemptId) return;
         try {
             const res = await fetch(
-                `${API}/scenarios/responses`,
+                API(`/scenarios/responses`),
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -735,7 +735,7 @@ export default function SimulatorPage() {
             // Submit each question answer as a separate response
             await Promise.all(
                 Object.entries(answers).map(([question_id, answer]) =>
-                    fetch(`${API}/scenarios/responses`, {
+                    fetch(API(`/scenarios/responses`), {
                         method: "POST",
                         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ attempt_id: attemptId, question_id, answer }),
@@ -754,7 +754,7 @@ export default function SimulatorPage() {
             // Auto-submit any unlocked side objective answers, then complete
             await autoSubmitObjectives();
             if (attemptId) {
-                fetch(`${API}/attempts/${attemptId}/complete`, {
+                fetch(API(`/attempts/${attemptId}/complete`), {
                     method: "PATCH",
                     headers: { Authorization: `Bearer ${token}` },
                 }).catch(err => console.error("Failed to complete attempt:", err));
@@ -784,7 +784,7 @@ export default function SimulatorPage() {
                 setOverlay("questions-end");
             } else {
                 if (attemptId) {
-                    fetch(`${API}/attempts/${attemptId}/complete`, {
+                    fetch(API(`/attempts/${attemptId}/complete`), {
                         method: "PATCH",
                         headers: { Authorization: `Bearer ${token}` },
                     }).catch(err => console.error("Failed to complete attempt:", err));

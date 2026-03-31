@@ -29,7 +29,7 @@ function CreateClassModal({ onClose, onCreated }) {
         setError("");
 
         try {
-            const res = await fetch(`${API}/classes`, {
+            const res = await fetch(API('/classes'), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -102,7 +102,7 @@ function AddStudentRow({ classId, onAdded }) {
 
         try {
             const res = await fetch(
-                `${API}/classes/${classId}/students`,
+                API(`/classes/${classId}/students`),
                 {
                     method: "POST",
                     headers: {
@@ -159,7 +159,7 @@ function ClassDetail({ cls, onClose, onStudentChange }) {
         setLoadingDetail(true);
         try {
             const res = await fetch(
-                `${API}/classes/${cls.id}`,
+                API(`/classes/${cls.id}`),
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             const data = await res.json();
@@ -185,7 +185,7 @@ function ClassDetail({ cls, onClose, onStudentChange }) {
         setRemoving(studentId);
         try {
             await fetch(
-                `${API}/classes/${cls.id}/students/${studentId}`,
+                API(`/classes/${cls.id}/students/${studentId}`),
                 { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
             );
             setStudents((prev) => prev.filter((s) => s.id !== studentId));
@@ -339,7 +339,7 @@ export default function Classes() {
     const [selectedClass, setSelectedClass] = useState(null);
 
     useEffect(() => {
-        fetch(`${API}/classes`, {
+        fetch(API('/classes'), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => {
