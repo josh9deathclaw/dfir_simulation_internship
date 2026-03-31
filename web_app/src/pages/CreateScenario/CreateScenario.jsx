@@ -9,6 +9,7 @@ import QuestionRow from "../../components/CreateScenario/QuestionRow";
 import PhaseCard from "../../components/CreateScenario/PhaseCard";
 import ScenarioLevelSection from "../../components/CreateScenario/ScenarioLevelSection";
 import "./CreateScenario.css";
+import { API } from "../../utils/api";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STEPS = [
@@ -392,7 +393,7 @@ export default function CreateScenario() {
     const [scenarioLevel, setScenarioLevel] = useState({ injects: [], objectives: [], questions: [] });
 
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_API_URL}/api/classes`, {
+        fetch(`${API}/classes`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => r.json())
@@ -423,7 +424,7 @@ export default function CreateScenario() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/scenarios`, {
+            const res = await fetch(`${API}/scenarios`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(buildPayload({ details, phases, scenarioLevel })),

@@ -9,6 +9,7 @@ import QuestionRow from "../../components/CreateScenario/QuestionRow";
 import PhaseCard from "../../components/CreateScenario/PhaseCard";
 import ScenarioLevelSection from "../../components/CreateScenario/ScenarioLevelSection";
 import "../CreateScenario/CreateScenario.css"
+import { API } from "../../utils/api";
 
 // ─── Constants (mirrored from CreateScenario) ─────────────────────────────────
 const STEPS = [
@@ -437,10 +438,10 @@ export default function EditScenario() {
         const headers = { Authorization: `Bearer ${token}` };
 
         Promise.all([
-            fetch(`${process.env.REACT_APP_API_URL}/api/scenarios/${scenarioId}/full`, { headers }),
-            fetch(`${process.env.REACT_APP_API_URL}/api/classes`, { headers }),
+            fetch(`${API}/scenarios/${scenarioId}/full`, { headers }),
+            fetch(`${API}/classes`, { headers }),
             // Fetch class associations for this scenario so we can pre-check them
-            fetch(`${process.env.REACT_APP_API_URL}/api/scenarios/${scenarioId}/classes`, { headers }),
+            fetch(`${API}/scenarios/${scenarioId}/classes`, { headers }),
         ])
             .then(async ([scenRes, classRes, scClassRes]) => {
                 if (!scenRes.ok) throw new Error("Scenario not found or access denied.");
@@ -490,7 +491,7 @@ export default function EditScenario() {
     const handleSave = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/scenarios/${scenarioId}`, {
+            const res = await fetch(`${API}/scenarios/${scenarioId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify(buildPayload({ details, phases, scenarioLevel })),

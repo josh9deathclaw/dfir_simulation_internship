@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import './Grading.css';
 import { getToken } from '../../utils/auth';
-
-const API = (path) => `${process.env.REACT_APP_API_URL}/api${path}`;
+import { API } from '../../utils/api';
 
 // ─── Top-level view states ────────────────────────────────────────────────────
 const VIEW = { CLASSES: 'classes', STUDENTS: 'students', ATTEMPT: 'attempt' };

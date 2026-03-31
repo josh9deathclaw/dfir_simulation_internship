@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getToken } from '../../utils/auth';
-
-
-const API = (path) => `${process.env.REACT_APP_API_URL}/api${path}`;
+import { API } from '../../utils/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VMPanel

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { setToken, setUser } from '../../utils/auth';
 import './Login.css';
 import "../../App.css";
+import { API } from '../../utils/api';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -17,7 +18,7 @@ export default function Login() {
         setLoading(true);
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/auth/login`, {
+            const response = await fetch(`${API}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

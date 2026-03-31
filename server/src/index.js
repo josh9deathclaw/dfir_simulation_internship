@@ -6,7 +6,16 @@ const db = require('./db');
 const port = process.env.PORT || 3001;
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:3000', // local React dev server
+  'https://dfir-simulation-internship-9ooxkzova-josh-dd61e37e.vercel.app', // frontend
+];
+
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
+
 app.use(express.json());
 
 app.get('/', (req, res) => {

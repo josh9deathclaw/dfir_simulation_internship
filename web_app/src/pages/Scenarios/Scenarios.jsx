@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "../../components/Navbar";
 import { getUser, getToken } from "../../utils/auth";
 import "./Scenarios.css";
+import { API } from "../../utils/api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const DIFFICULTY_CONFIG = {
@@ -57,7 +58,7 @@ function JoinClassModal({ onClose, onJoined }) {
         setError("");
 
         try {
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/classes/join`, {
+            const res = await fetch(`${API}/classes/join`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -226,7 +227,7 @@ function StudentsTab({ scenarioId, accentColor }) {
     const token = getToken();
 
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_API_URL}/api/scenarios/${scenarioId}/students`, {
+        fetch(`${API}/scenarios/${scenarioId}/students`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => r.json())
@@ -284,7 +285,7 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
         setPublishing(true);
         try {
             const res = await fetch(
-                `${process.env.REACT_APP_API_URL}/api/scenarios/${scenario.id}/publish`,
+                `${API}/scenarios/${scenario.id}/publish`,
                 { 
                     method: "PATCH", 
                     headers: { 
@@ -472,7 +473,7 @@ export default function Scenarios() {
 
     const fetchScenarios = useCallback(() => {
         setLoading(true);
-        fetch(`${process.env.REACT_APP_API_URL}/api/scenarios`, {
+        fetch(`${API}/scenarios`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => {
@@ -484,7 +485,7 @@ export default function Scenarios() {
     }, [token]);
 
     const fetchClasses = useCallback(() => {
-        fetch(`${process.env.REACT_APP_API_URL}/api/classes`, {
+        fetch(`${API}/classes`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((r) => r.ok ? r.json() : [])

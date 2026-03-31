@@ -3,8 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { setToken, setUser } from '../../utils/auth';
 import './Register.css';
 import "../../App.css";
-
-const BASE_URL = `${process.env.REACT_APP_API_URL}/api`;
+import { API } from '../../utils/api';
 
 export default function Register() {
     const [firstName, setFirstName] = useState('');
@@ -33,7 +32,7 @@ export default function Register() {
         setLoading(true);
 
         try {
-            const response = await fetch(`${BASE_URL}/auth/register`, {
+            const response = await fetch(`${API}/auth/register`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -56,7 +55,7 @@ export default function Register() {
 
             // After successful registration, log the user in
             // Call login endpoint
-            const loginResponse = await fetch(`${BASE_URL}/auth/login`, {
+            const loginResponse = await fetch(`${API}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

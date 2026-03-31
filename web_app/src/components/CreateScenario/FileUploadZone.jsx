@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import { getToken } from "../../utils/auth";
+import { API } from "../../utils/api";
 
 const EXT_TYPE_MAP = {
     log: "Log File", txt: "Log File",
@@ -47,7 +48,7 @@ export default function FileUploadZone({ inject, onUpdate }) {
             const formData = new FormData();
             formData.append("file", file);
 
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/uploads`, {
+            const res = await fetch(`${API}/uploads`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
