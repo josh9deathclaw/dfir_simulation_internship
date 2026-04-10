@@ -318,3 +318,19 @@
     .sc-modal__hero { padding: 20px 20px 0; }
     .sc-modal__body { padding: 18px 20px 24px; }
 }
+
+/* --- Class Selector Reference --- */
+.sc-class-select {
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-ui-mono);
+    padding: 5px 12px;
+    text-transform: capitalize;
+    transition: all 0.18s;
+}
+
+.sc-class-select:hover { color: var(--color-text-primary); }
