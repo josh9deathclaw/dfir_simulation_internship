@@ -64,6 +64,12 @@ app.use('/api/vm', vmRoutes);
 const dashboardRouter = require('./routes/dashboard');
 app.use('/api/dashboard', dashboardRouter);
 
+const usersRouter = require('./routes/users');
+app.use('/api/users', usersRouter);
+ 
+const boardRouter = require('./routes/board');
+app.use('/api/board', boardRouter);
+
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

@@ -4,6 +4,7 @@ import Navbar from '../../components/Navbar';
 import './Grading.css';
 import { getToken } from '../../utils/auth';
 import { API } from '../../utils/api';
+import InvestigationBoard from '../../components/InvestigationBoard/InvestigationBoard';
 
 // ─── Top-level view states ────────────────────────────────────────────────────
 const VIEW = { CLASSES: 'classes', STUDENTS: 'students', ATTEMPT: 'attempt' };
@@ -427,6 +428,7 @@ function AttemptDetail({ attemptId, authHeaders, onGraded }) {
     const [error,       setError]       = useState(null);
     const [submitting,  setSubmitting]  = useState(false);
     const [submitError, setSubmitError] = useState(null);
+    const [showBoard,   setShowBoard]   = useState(false);
 
     // Local score state — a map of responseId → { score, grader_notes }
     // This is what the inputs are bound to. On save/submit we flush from here.
@@ -570,6 +572,7 @@ function AttemptDetail({ attemptId, authHeaders, onGraded }) {
     const questionsByPhase = groupByPhase(questions);
 
     return (
+        <>
         <div className="grading-attempt">
 
             {/* Score bar — always visible at top */}
@@ -696,6 +699,14 @@ function AttemptDetail({ attemptId, authHeaders, onGraded }) {
                         </div>
                     )}
 
+                    {/* View board button */}
+                    <button
+                        className="grading-btn grading-btn--board"
+                        onClick={() => setShowBoard(true)}
+                    >
+                        ⊞ VIEW INVESTIGATION BOARD
+                    </button>
+
                     {/* Footer actions */}
                     <div className="grading-actions">
                         {submitError && (
@@ -722,6 +733,15 @@ function AttemptDetail({ attemptId, authHeaders, onGraded }) {
                 </div>
             </div>
         </div>
+
+        {showBoard && (
+            <InvestigationBoard
+                attemptId={attemptId}
+                readOnly={true}
+                onClose={() => setShowBoard(false)}
+            />
+        )}
+    </>
     );
 }
 

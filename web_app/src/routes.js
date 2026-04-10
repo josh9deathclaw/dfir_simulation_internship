@@ -97,13 +97,13 @@ export const navigationTabs = [
     key: "results",
     path: "/results",
     label: "Results",
-    roles: ["student", "admin"]
+    roles: ["student"]
   },
   {
     key: "grading",
     path: "/grading",
     label: "Grading",
-    roles: ["teacher", "admin"]
+    roles: ["teacher"]
   },
   {
     key: "account",

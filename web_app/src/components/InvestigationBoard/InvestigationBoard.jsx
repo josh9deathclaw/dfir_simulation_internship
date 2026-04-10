@@ -12,6 +12,8 @@ import "reactflow/dist/style.css";
 
 import EvidenceCardNode from "./EvidenceCardNode";
 import "./InvestigationBoard.css";
+import { getToken } from "../../utils/auth";
+import { API } from "../../utils/api";
 
 // ── Register custom node types (defined OUTSIDE the component to be stable) ──
 const NODE_TYPES = { evidenceCard: EvidenceCardNode };
@@ -38,8 +40,6 @@ function buildInitialNodes(receivedInjects, onAnnotate) {
     return receivedInjects.map((inject, i) => {
         const col = i % COLS;
         const row = Math.floor(i / COLS);
-
-        // Add jitter so cards don't line up perfectly
         const jitterX = Math.random() * 60 - 30;
         const jitterY = Math.random() * 40 - 20;
 
@@ -59,7 +59,7 @@ function buildInitialNodes(receivedInjects, onAnnotate) {
     });
 }
 
-// ── LocalStorage helpers ──────────────────────────────────────────────────────
+// ── LocalStorage helpers (write-through cache) ────────────────────────────────
 function lsKey(attemptId, suffix) {
     return `dfir_board_${suffix}_${attemptId}`;
 }
@@ -79,32 +79,48 @@ function loadFromStorage(attemptId) {
     }
 }
 
-function saveNodesToStorage(attemptId, nodes) {
+function writeToStorage(attemptId, { nodes, edges, annotations }) {
     try {
-        // Only persist id, type, position — not the callback functions in data
-        const slim = nodes.map(n => ({
-            id:       n.id,
-            type:     n.type,
-            position: n.position,
-        }));
-        localStorage.setItem(lsKey(attemptId, "nodes"), JSON.stringify(slim));
+        if (nodes !== undefined) {
+            const slim = nodes.map(n => ({ id: n.id, type: n.type, position: n.position }));
+            localStorage.setItem(lsKey(attemptId, "nodes"), JSON.stringify(slim));
+        }
+        if (edges !== undefined) {
+            localStorage.setItem(lsKey(attemptId, "edges"), JSON.stringify(edges));
+        }
+        if (annotations !== undefined) {
+            localStorage.setItem(lsKey(attemptId, "annotations"), JSON.stringify(annotations));
+        }
     } catch {}
 }
 
-function saveEdgesToStorage(attemptId, edges) {
-    try {
-        localStorage.setItem(lsKey(attemptId, "edges"), JSON.stringify(edges));
-    } catch {}
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function loadBoardFromAPI(attemptId, token) {
+    const res = await fetch(API(`/board/${attemptId}`), {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Board load failed");
+    return res.json(); // { boardState, injects }
 }
 
-function saveAnnotationsToStorage(attemptId, annotations) {
-    try {
-        localStorage.setItem(lsKey(attemptId, "annotations"), JSON.stringify(annotations));
-    } catch {}
+async function saveBoardToAPI(attemptId, token, { nodes, edges, annotations }) {
+    const slim = nodes.map(n => ({ id: n.id, type: n.type, position: n.position }));
+    await fetch(API(`/board/${attemptId}`), {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ nodes: slim, edges, annotations }),
+    });
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function InvestigationBoard({ receivedInjects, attemptId, onClose }) {
+// Props:
+//   receivedInjects  — array of inject objects (used in student live mode)
+//   attemptId        — UUID of the attempt
+//   onClose          — close handler
+//   readOnly         — if true, board is view-only (teacher mode). Injects are
+//                      loaded from the API instead of using receivedInjects.
+export default function InvestigationBoard({ receivedInjects = [], attemptId, onClose, readOnly = false }) {
+    const token = getToken();
 
     // ── Annotation modal state ─────────────────────────────────────────────────
     const [annotationModal, setAnnotationModal] = useState({ open: false, nodeId: null });
@@ -115,18 +131,38 @@ export default function InvestigationBoard({ receivedInjects, attemptId, onClose
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+    // ── Inject list (may come from API in readOnly mode) ──────────────────────
+    const [boardInjects, setBoardInjects] = useState(receivedInjects);
+    const [boardLoading, setBoardLoading] = useState(readOnly); // only show loader in readOnly
+
     // ── Debounce timer refs ────────────────────────────────────────────────────
-    const saveNodesTimer       = useRef(null);
-    const saveAnnotationsTimer = useRef(null);
+    const saveTimer = useRef(null);
+
+    // ── Flush board state to API + localStorage ───────────────────────────────
+    const flushSave = useCallback((currentNodes, currentEdges, currentAnnotations) => {
+        if (readOnly || !attemptId) return;
+        writeToStorage(attemptId, { nodes: currentNodes, edges: currentEdges, annotations: currentAnnotations });
+        saveBoardToAPI(attemptId, token, {
+            nodes: currentNodes,
+            edges: currentEdges,
+            annotations: currentAnnotations,
+        }).catch(err => console.warn("[Board save error]", err));
+    }, [attemptId, token, readOnly]);
+
+    // ── Debounced save triggered by any state change ───────────────────────────
+    const scheduleSave = useCallback((currentNodes, currentEdges, currentAnnotations) => {
+        if (readOnly) return;
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+            flushSave(currentNodes, currentEdges, currentAnnotations);
+        }, 800);
+    }, [flushSave, readOnly]);
 
     // ── Open annotation modal ─────────────────────────────────────────────────
     const handleAnnotate = useCallback((nodeId) => {
+        if (readOnly) return;
         setAnnotationModal({ open: true, nodeId });
-        setAnnotationDraft(prev => {
-            // Read from current annotations state via functional update pattern
-            return "";  // set below via effect
-        });
-    }, []);
+    }, [readOnly]);
 
     // Seed draft when modal opens
     useEffect(() => {
@@ -143,91 +179,157 @@ export default function InvestigationBoard({ receivedInjects, attemptId, onClose
         const updated = { ...annotations, [nodeId]: annotationDraft };
         setAnnotations(updated);
 
-        // Patch the annotation into the node's data so the card updates live
-        setNodes(nds =>
-            nds.map(n =>
+        setNodes(nds => {
+            const next = nds.map(n =>
                 n.id === nodeId
                     ? { ...n, data: { ...n.data, annotation: annotationDraft } }
                     : n
-            )
-        );
-
-        // Persist
-        clearTimeout(saveAnnotationsTimer.current);
-        saveAnnotationsTimer.current = setTimeout(() => {
-            saveAnnotationsToStorage(attemptId, updated);
-        }, 300);
+            );
+            scheduleSave(next, edges, updated);
+            return next;
+        });
 
         setAnnotationModal({ open: false, nodeId: null });
         setAnnotationDraft("");
-    }, [annotationModal, annotationDraft, annotations, attemptId, setNodes]);
+    }, [annotationModal, annotationDraft, annotations, edges, scheduleSave, setNodes]);
 
-    // ── Cancel annotation modal ────────────────────────────────────────────────
     const handleCancelAnnotation = useCallback(() => {
         setAnnotationModal({ open: false, nodeId: null });
         setAnnotationDraft("");
     }, []);
 
-    // ── Build nodes on mount, restoring positions if saved ────────────────────
+    // ── Build nodes from an inject list + saved state ─────────────────────────
+    const buildNodes = useCallback((injectList, savedNodes, savedAnnotations) => {
+        const posMap = savedNodes
+            ? Object.fromEntries(savedNodes.map(n => [n.id, n.position]))
+            : {};
+
+        return injectList.map((inject, i) => {
+            const savedPos = posMap[String(inject.id)];
+            const col = i % 4;
+            const row = Math.floor(i / 4);
+            const pos = savedPos || {
+                x: 80  + col * 280 + (Math.random() * 60 - 30),
+                y: 60  + row * 220 + (Math.random() * 40 - 20),
+            };
+
+            return {
+                id:       String(inject.id),
+                type:     "evidenceCard",
+                position: pos,
+                draggable: !readOnly,
+                connectable: !readOnly,
+                data: {
+                    inject,
+                    annotation: savedAnnotations?.[String(inject.id)] || "",
+                    onAnnotate: readOnly ? null : handleAnnotate,
+                },
+            };
+        });
+    }, [readOnly, handleAnnotate]);
+
+    // ── Load board on mount ───────────────────────────────────────────────────
     useEffect(() => {
-        if (!attemptId || receivedInjects.length === 0) return;
+        if (!attemptId) return;
 
-        const { savedNodes, savedAnnotations, savedEdges } = loadFromStorage(attemptId);
+        if (readOnly) {
+            // Teacher mode: load everything from the API
+            setBoardLoading(true);
+            loadBoardFromAPI(attemptId, token)
+                .then(({ boardState, injects }) => {
+                    setBoardInjects(injects);
+                    const savedNodes       = boardState?.nodes       || null;
+                    const savedAnnotations = boardState?.annotations || {};
+                    const savedEdges       = boardState?.edges       || [];
 
-        // Restore annotations
-        setAnnotations(savedAnnotations);
+                    setAnnotations(savedAnnotations);
 
-        // Restore edges
-        if (savedEdges.length > 0) {
-            setEdges(savedEdges.map(e => ({
-                ...e,
-                style: DEFAULT_EDGE_OPTIONS.style,
-            })));
-        }
+                    if (savedEdges.length > 0) {
+                        setEdges(savedEdges.map(e => ({ ...e, style: DEFAULT_EDGE_OPTIONS.style })));
+                    }
 
-        if (savedNodes && savedNodes.length > 0) {
-            // Merge saved positions with current inject data
-            // New injects (not in saved) get fresh random positions
-            const posMap = Object.fromEntries(savedNodes.map(n => [n.id, n.position]));
-
-            const merged = receivedInjects.map((inject, i) => {
-                const id = String(inject.id);
-                const position = posMap[id] || {
-                    x: 80 + (i % 4) * 280 + Math.random() * 60 - 30,
-                    y: 60 + Math.floor(i / 4) * 220 + Math.random() * 40 - 20,
-                };
-                return {
-                    id,
-                    type: "evidenceCard",
-                    position,
-                    data: {
-                        inject,
-                        annotation: savedAnnotations[id] || "",
-                        onAnnotate: handleAnnotate,
-                    },
-                };
-            });
-            setNodes(merged);
+                    setNodes(buildNodes(injects, savedNodes, savedAnnotations));
+                })
+                .catch(err => {
+                    console.error("[Board load error]", err);
+                    setBoardInjects([]);
+                })
+                .finally(() => setBoardLoading(false));
         } else {
-            // Fresh layout
-            setNodes(buildInitialNodes(receivedInjects, handleAnnotate));
+            // Student mode: try API first, fall back to localStorage
+            loadBoardFromAPI(attemptId, token)
+                .then(({ boardState }) => {
+                    if (boardState) {
+                        // API has saved state — use it, also warm the localStorage cache
+                        const savedAnnotations = boardState.annotations || {};
+                        const savedEdges       = boardState.edges       || [];
+                        const savedNodes       = boardState.nodes       || null;
+
+                        setAnnotations(savedAnnotations);
+                        writeToStorage(attemptId, {
+                            nodes:       savedNodes,
+                            edges:       savedEdges,
+                            annotations: savedAnnotations,
+                        });
+
+                        if (savedEdges.length > 0) {
+                            setEdges(savedEdges.map(e => ({ ...e, style: DEFAULT_EDGE_OPTIONS.style })));
+                        }
+                        setNodes(buildNodes(receivedInjects, savedNodes, savedAnnotations));
+                    } else {
+                        // No API state yet — try localStorage
+                        const { savedNodes, savedAnnotations, savedEdges } = loadFromStorage(attemptId);
+                        setAnnotations(savedAnnotations);
+                        if (savedEdges.length > 0) {
+                            setEdges(savedEdges.map(e => ({ ...e, style: DEFAULT_EDGE_OPTIONS.style })));
+                        }
+                        setNodes(buildNodes(receivedInjects, savedNodes, savedAnnotations));
+                    }
+                })
+                .catch(() => {
+                    // API unavailable — fall back to localStorage silently
+                    const { savedNodes, savedAnnotations, savedEdges } = loadFromStorage(attemptId);
+                    setAnnotations(savedAnnotations);
+                    if (savedEdges.length > 0) {
+                        setEdges(savedEdges.map(e => ({ ...e, style: DEFAULT_EDGE_OPTIONS.style })));
+                    }
+                    setNodes(buildNodes(receivedInjects, savedNodes, savedAnnotations));
+                });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [attemptId, receivedInjects.length]);
+    }, [attemptId, readOnly, receivedInjects.length]);
 
     // ── Keep onAnnotate callback fresh on all nodes ────────────────────────────
-    // (avoids stale closure issues if handleAnnotate reference changes)
     useEffect(() => {
         setNodes(nds =>
             nds.map(n => ({
                 ...n,
-                data: { ...n.data, onAnnotate: handleAnnotate },
+                data: { ...n.data, onAnnotate: readOnly ? null : handleAnnotate },
             }))
         );
-    }, [handleAnnotate, setNodes]);
+    }, [handleAnnotate, readOnly, setNodes]);
+
+    // ── Flush to API when board closes ────────────────────────────────────────
+    // useEffect cleanup runs on unmount — we grab the latest state via ref
+    const latestState = useRef({ nodes: [], edges: [], annotations: {} });
+    useEffect(() => {
+        latestState.current = { nodes, edges, annotations };
+    });
+
+    useEffect(() => {
+        return () => {
+            if (!readOnly) {
+                clearTimeout(saveTimer.current);
+                const { nodes: n, edges: e, annotations: a } = latestState.current;
+                flushSave(n, e, a);
+            }
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [readOnly]);
 
     // ── Connect two nodes with a red thread ───────────────────────────────────
     const handleConnect = useCallback((connection) => {
+        if (readOnly) return;
         setEdges(eds => {
             const next = addEdge(
                 {
@@ -237,32 +339,30 @@ export default function InvestigationBoard({ receivedInjects, attemptId, onClose
                 },
                 eds
             );
-            clearTimeout(saveNodesTimer.current);
-            saveNodesTimer.current = setTimeout(() => {
-                saveEdgesToStorage(attemptId, next);
-            }, 300);
-            return next;
-        });
-    }, [attemptId, setEdges]);
-
-    // ── Persist node positions on drag stop ───────────────────────────────────
-    const handleNodeDragStop = useCallback((_, __, draggedNodes) => {
-        clearTimeout(saveNodesTimer.current);
-        saveNodesTimer.current = setTimeout(() => {
             setNodes(current => {
-                saveNodesToStorage(attemptId, current);
+                scheduleSave(current, next, annotations);
                 return current;
             });
-        }, 300);
-    }, [attemptId, setNodes]);
+            return next;
+        });
+    }, [readOnly, setEdges, setNodes, scheduleSave, annotations]);
+
+    // ── Persist node positions on drag stop ───────────────────────────────────
+    const handleNodeDragStop = useCallback(() => {
+        if (readOnly) return;
+        setNodes(current => {
+            scheduleSave(current, edges, annotations);
+            return current;
+        });
+    }, [readOnly, setNodes, scheduleSave, edges, annotations]);
 
     // ── Derived ───────────────────────────────────────────────────────────────
-    const annotatedNode = annotationModal.nodeId
-        ? receivedInjects.find(inj => String(inj.id) === annotationModal.nodeId)
+    const annotatedNode    = annotationModal.nodeId
+        ? boardInjects.find(inj => String(inj.id) === annotationModal.nodeId)
         : null;
-
-    const connectionCount = edges.length;
-    const annotationCount = Object.values(annotations).filter(a => a.trim()).length;
+    const connectionCount  = edges.length;
+    const annotationCount  = Object.values(annotations).filter(a => a?.trim()).length;
+    const displayInjects   = readOnly ? boardInjects : receivedInjects;
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
@@ -273,12 +373,17 @@ export default function InvestigationBoard({ receivedInjects, attemptId, onClose
                 <div className="ib-header">
                     <div className="ib-header__left">
                         <span className="ib-header__prompt">&gt;&gt;</span>
-                        <span className="ib-header__title">INVESTIGATION_BOARD</span>
-                        <span className="ib-header__blink">_</span>
+                        <span className="ib-header__title">
+                            {readOnly ? "INVESTIGATION_BOARD — READ ONLY" : "INVESTIGATION_BOARD"}
+                        </span>
+                        {!readOnly && <span className="ib-header__blink">_</span>}
+                        {readOnly && (
+                            <span className="ib-header__readonly-badge">VIEWER MODE</span>
+                        )}
                     </div>
                     <div className="ib-header__stats">
                         <span className="ib-stat">
-                            <span className="ib-stat__num">{receivedInjects.length}</span>
+                            <span className="ib-stat__num">{displayInjects.length}</span>
                             <span className="ib-stat__label">EVIDENCE</span>
                         </span>
                         <span className="ib-stat__sep">|</span>
@@ -299,29 +404,43 @@ export default function InvestigationBoard({ receivedInjects, attemptId, onClose
 
                 {/* ── Canvas ── */}
                 <div className="ib-canvas">
-                    {receivedInjects.length === 0 ? (
+                    {boardLoading ? (
                         <div className="ib-empty">
                             <div className="ib-empty__icon">◈</div>
-                            <div className="ib-empty__title">NO EVIDENCE RECEIVED</div>
+                            <div className="ib-empty__title">
+                                LOADING BOARD<span className="ib-header__blink">_</span>
+                            </div>
+                        </div>
+                    ) : displayInjects.length === 0 ? (
+                        <div className="ib-empty">
+                            <div className="ib-empty__icon">◈</div>
+                            <div className="ib-empty__title">
+                                {readOnly ? "NO EVIDENCE WAS RECEIVED" : "NO EVIDENCE RECEIVED"}
+                            </div>
                             <div className="ib-empty__sub">
-                                Evidence will appear here as transmissions are received
+                                {readOnly
+                                    ? "The student did not receive any injects during this attempt"
+                                    : "Evidence will appear here as transmissions are received"}
                             </div>
                         </div>
                     ) : (
                         <ReactFlow
                             nodes={nodes}
                             edges={edges}
-                            onNodesChange={onNodesChange}
-                            onEdgesChange={onEdgesChange}
-                            onConnect={handleConnect}
-                            onNodeDragStop={handleNodeDragStop}
+                            onNodesChange={readOnly ? undefined : onNodesChange}
+                            onEdgesChange={readOnly ? undefined : onEdgesChange}
+                            onConnect={readOnly ? undefined : handleConnect}
+                            onNodeDragStop={readOnly ? undefined : handleNodeDragStop}
                             nodeTypes={NODE_TYPES}
                             defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+                            nodesDraggable={!readOnly}
+                            nodesConnectable={!readOnly}
+                            elementsSelectable={!readOnly}
                             fitView
                             fitViewOptions={{ padding: 0.2 }}
                             minZoom={0.2}
                             maxZoom={2}
-                            deleteKeyCode="Delete"
+                            deleteKeyCode={readOnly ? null : "Delete"}
                             proOptions={{ hideAttribution: true }}
                         >
                             <Background
@@ -344,20 +463,27 @@ export default function InvestigationBoard({ receivedInjects, attemptId, onClose
                     )}
                 </div>
 
-                {/* ── Hint bar ── */}
-                <div className="ib-hints">
-                    <span className="ib-hint">DRAG CARDS TO REPOSITION</span>
-                    <span className="ib-hint__sep">·</span>
-                    <span className="ib-hint">DRAG FROM ◼ HANDLES TO CONNECT</span>
-                    <span className="ib-hint__sep">·</span>
-                    <span className="ib-hint">DEL KEY REMOVES SELECTED THREAD</span>
-                    <span className="ib-hint__sep">·</span>
-                    <span className="ib-hint">SCROLL TO ZOOM</span>
-                </div>
+                {/* ── Hint bar — hidden in readOnly ── */}
+                {!readOnly && (
+                    <div className="ib-hints">
+                        <span className="ib-hint">DRAG CARDS TO REPOSITION</span>
+                        <span className="ib-hint__sep">·</span>
+                        <span className="ib-hint">DRAG FROM ◼ HANDLES TO CONNECT</span>
+                        <span className="ib-hint__sep">·</span>
+                        <span className="ib-hint">DEL KEY REMOVES SELECTED THREAD</span>
+                        <span className="ib-hint__sep">·</span>
+                        <span className="ib-hint">SCROLL TO ZOOM</span>
+                    </div>
+                )}
+                {readOnly && (
+                    <div className="ib-hints ib-hints--readonly">
+                        <span className="ib-hint">READ-ONLY VIEW · SCROLL TO ZOOM · BOARD SAVED BY STUDENT</span>
+                    </div>
+                )}
             </div>
 
-            {/* ── Annotation Modal ── */}
-            {annotationModal.open && (
+            {/* ── Annotation Modal — only in student mode ── */}
+            {!readOnly && annotationModal.open && (
                 <div className="ib-anno-backdrop" onClick={handleCancelAnnotation}>
                     <div className="ib-anno-modal" onClick={e => e.stopPropagation()}>
                         <div className="ib-anno-modal__header">

@@ -627,15 +627,19 @@ export default function SimulatorPage() {
 
                 releasedIdsRef.current.add(inj.id);
 
+                // Record delivery to DB so teachers can view the board later
+                fetch(API(`/board/injects`), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ attempt_id: attemptId, inject_id: inj.id })
+                }).catch(err => console.warn('[Board record ERROR]', err));
+
                 // file_name may be null in DB — fall back to extracting from file_path
                 const injectFileName = inj.file_name || inj.file_path?.split('/').pop();
                 if (inj.file_path && injectFileName) {
-                    console.log('[Inject FETCH] sending', {
-                        attemptId,
-                        file_path: inj.file_path,
-                        file_name: inj.file_name
-                    });
-
                     fetch(API(`/vm/inject/${attemptId}`), {
                         method: 'POST',
                         headers: {
@@ -967,7 +971,6 @@ export default function SimulatorPage() {
                 </div>
             )}
 
-            <div className="sim-demo-hint">PRESS P TO ADVANCE PHASE</div>
         </div>
     );
 }
