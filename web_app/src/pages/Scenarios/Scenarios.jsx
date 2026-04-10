@@ -531,16 +531,25 @@ export default function Scenarios() {
         fetchClasses();
     }, [fetchScenarios, fetchClasses]);
 
-    const visible = scenarios.filter(
-        (s) => filter === "all" || s.difficulty === filter
-    );
+    // For teachers: filters apply only to their own scenarios.
+    // For students:  filters apply to all visible scenarios.
+    const myScenarios = userRole === "teacher"
+        ? scenarios.filter((s) => {
+            if (s.created_by !== userId) return false;
+            if (filter !== "all" && s.difficulty !== filter) return false;
+            if (selectedClass !== "all" && !(s.class_names || []).includes(selectedClass)) return false;
+            return true;
+          })
+        : [];
 
-    const myScenarios        = userRole === "teacher" ? visible.filter((s) => s.created_by === userId) : [];
-    const allScenariosSection = visible;
-
-    const classFiltered = allScenariosSection.filter(
-        (s) => selectedClass === "all" || (s.class_names || []).includes(selectedClass)
-    );
+    // Students only: difficulty + class filter on their assigned scenarios
+    const classFiltered = userRole === "student"
+        ? scenarios.filter((s) => {
+            if (filter !== "all" && s.difficulty !== filter) return false;
+            if (selectedClass !== "all" && !(s.class_names || []).includes(selectedClass)) return false;
+            return true;
+          })
+        : [];
 
     const handleEdit = (scenario) => {
         navigate(`/edit-scenario/${scenario.id}`);
@@ -622,40 +631,53 @@ export default function Scenarios() {
                             </section>
                         )}
 
-                        <section className="sc-section sc-section--delay2">
-                            <SectionLabel
-                                label={userRole === "teacher" ? "All Scenarios" : "Your Scenarios"}
-                                count={classFiltered.length}
-                            />
-                            {classFiltered.length > 0 ? (
-                                <div className="sc-grid">
-                                    {classFiltered.map((s) => (
-                                        <ScenarioCard key={s.id} scenario={s} userId={userId} userRole={userRole} onClick={setSelected} />
-                                    ))}
-                                </div>
-                            ) : (
-                                selectedClass !== "all" ? (
-                                    <div className="sc-placeholder">No scenarios in this class.</div>
-                                ) : userRole === "student" ? (
-                                    <div className="sc-student-empty">
-                                        <div className="sc-student-empty__icon">⬡</div>
-                                        <div className="sc-student-empty__title">No scenarios yet</div>
-                                        <p className="sc-student-empty__desc">
-                                            Join a class using the enrolment code your teacher gave you to unlock your scenarios.
-                                        </p>
-                                        <button
-                                            className="sc-btn sc-btn--primary"
-                                            style={{ background: "#4cc9f0", color: "#000", boxShadow: "0 4px 20px #4cc9f044" }}
-                                            onClick={() => setShowJoin(true)}
-                                        >
-                                            + Join a Class
-                                        </button>
+                        {/* Students: their assigned scenarios */}
+                        {userRole === "student" && (
+                            <section className="sc-section sc-section--delay2">
+                                <SectionLabel label="Your Scenarios" count={classFiltered.length} />
+                                {classFiltered.length > 0 ? (
+                                    <div className="sc-grid">
+                                        {classFiltered.map((s) => (
+                                            <ScenarioCard key={s.id} scenario={s} userId={userId} userRole={userRole} onClick={setSelected} />
+                                        ))}
                                     </div>
                                 ) : (
-                                    <div className="sc-placeholder">No other scenarios exist yet.</div>
-                                )
-                            )}
-                        </section>
+                                    selectedClass !== "all" ? (
+                                        <div className="sc-placeholder">No scenarios in this class.</div>
+                                    ) : (
+                                        <div className="sc-student-empty">
+                                            <div className="sc-student-empty__icon">⬡</div>
+                                            <div className="sc-student-empty__title">No scenarios yet</div>
+                                            <p className="sc-student-empty__desc">
+                                                Join a class using the enrolment code your teacher gave you to unlock your scenarios.
+                                            </p>
+                                            <button
+                                                className="sc-btn sc-btn--primary"
+                                                style={{ background: "#4cc9f0", color: "#000", boxShadow: "0 4px 20px #4cc9f044" }}
+                                                onClick={() => setShowJoin(true)}
+                                            >
+                                                + Join a Class
+                                            </button>
+                                        </div>
+                                    )
+                                )}
+                            </section>
+                        )}
+
+                        {/* Teachers: empty state if no own scenarios */}
+                        {userRole === "teacher" && myScenarios.length === 0 && (
+                            <section className="sc-section sc-section--delay2">
+                                <div className="sc-placeholder">
+                                    No scenarios yet.{" "}
+                                    <span
+                                        style={{ color: "var(--color-cyan)", cursor: "pointer" }}
+                                        onClick={() => navigate("/create-scenario")}
+                                    >
+                                        Create your first scenario →
+                                    </span>
+                                </div>
+                            </section>
+                        )}
                     </>
                 )}
             </div>

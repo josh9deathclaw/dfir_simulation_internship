@@ -61,6 +61,9 @@ app.use('/api/results', resultsRoutes);
 const vmRoutes = require('./routes/vm');
 app.use('/api/vm', vmRoutes);
 
+const dashboardRouter = require('./routes/dashboard');
+app.use('/api/dashboard', dashboardRouter);
+
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

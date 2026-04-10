@@ -39,6 +39,11 @@
     z-index: 1;
 }
 
+/* Light mode: remove the dark vignette — it creates an ugly dark ring on white */
+[data-theme="light"] .sim-vignette {
+    display: none;
+}
+
 /* ─── Body layout ─────────────────────────────────────────────────────────── */
 .sim-body {
     position: absolute;
@@ -1038,3 +1043,117 @@
 .sim-obj-row__submit:disabled { opacity: 0.3; cursor: not-allowed; }
 .sim-obj-row__submit--ready { border-color: var(--color-amber); color: var(--color-amber); }
 .sim-obj-row__submit--ready:hover { background: var(--color-amber-subtle); border-color: var(--color-amber); box-shadow: 0 0 10px var(--color-amber-dim); }
+/* ═══════════════════════════════════════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+   The simulator is designed for dark mode. In light mode we keep the
+   cyberpunk structure but swap the heavy dark surfaces to clean whites
+   so it reads well on a light background.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+[data-theme="light"] .sim-page {
+    background: var(--color-bg);
+}
+
+/* Feed area — white card instead of near-black */
+[data-theme="light"] .sim-feed {
+    background: transparent;
+}
+
+[data-theme="light"] .sim-inject {
+    background: var(--color-surface);
+    border-color: var(--color-cyan-border2);
+    border-left-color: var(--color-cyan-dim);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+
+[data-theme="light"] .sim-inject:hover {
+    border-left-color: var(--color-cyan);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.09);
+}
+
+[data-theme="light"] .sim-inject--new {
+    box-shadow: 0 0 16px var(--color-cyan-subtle), 0 2px 12px rgba(0,0,0,0.08);
+}
+
+/* Inject scanline — barely visible in light mode */
+[data-theme="light"] .sim-inject__scanline {
+    opacity: 0.3;
+}
+
+/* File badge row */
+[data-theme="light"] .sim-inject__file {
+    background: var(--color-inset);
+    border-color: var(--color-border-ghost);
+}
+
+/* Objectives panel */
+[data-theme="light"] .sim-objectives {
+    background: var(--color-surface);
+    border-left-color: var(--color-cyan-border);
+    box-shadow: -1px 0 8px rgba(0,0,0,0.06);
+}
+
+/* Bottom bar */
+[data-theme="light"] .sim-bottombar {
+    background: var(--color-overlay);
+    border-top-color: var(--color-cyan-border);
+    box-shadow: 0 -1px 12px rgba(0,0,0,0.08);
+}
+
+/* Modals */
+[data-theme="light"] .sim-modal-backdrop {
+    background: var(--color-backdrop);
+}
+
+[data-theme="light"] .sim-modal {
+    background: var(--color-surface);
+    border-color: var(--color-cyan-border);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+}
+
+[data-theme="light"] .sim-modal__header {
+    background: var(--color-surface-raised);
+}
+
+/* Inputs inside modals */
+[data-theme="light"] .sim-question__input,
+[data-theme="light"] .sim-obj-row__input,
+[data-theme="light"] .sim-annotation__input {
+    background: var(--color-inset);
+    border-color: var(--color-cyan-border);
+    color: var(--color-text-primary);
+}
+
+[data-theme="light"] .sim-question__input:focus,
+[data-theme="light"] .sim-obj-row__input:focus {
+    border-color: var(--color-cyan);
+}
+
+/* Phase transition + complete overlays */
+[data-theme="light"] .sim-transition,
+[data-theme="light"] .sim-complete {
+    background: var(--color-bg);
+}
+
+/* Phase pip track — more visible on light bg */
+[data-theme="light"] .sim-phase-pip {
+    background: var(--color-cyan-border);
+}
+
+/* Bar icons */
+[data-theme="light"] .sim-bar-icon {
+    border-color: var(--color-cyan-border);
+    color: var(--color-text-secondary);
+}
+
+[data-theme="light"] .sim-bar-icon:hover {
+    border-color: var(--color-cyan-dim);
+    color: var(--color-cyan);
+    background: var(--color-cyan-subtle);
+}
+
+/* Side objective rows */
+[data-theme="light"] .sim-obj-row--side {
+    background: var(--color-amber-subtle);
+    border-left-color: var(--color-amber-dim);
+}

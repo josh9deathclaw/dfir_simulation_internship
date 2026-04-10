@@ -1,124 +1,187 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   DASHBOARD
-   Shared layout comes from PageStyles.css.
-   This file only contains Dashboard-specific classes.
-   Uses tokens from tokens.css only. No raw values.
+   DASHBOARD — role-specific content styles
+   Extends PageStyles.css tokens — no raw values.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-@import '../../styles/PageStyles.css';
-
-/* ── Blink cursor ─────────────────────────────────────────────────────────── */
-@keyframes blink {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0; }
-}
-.dashboard-blink { animation: blink 1s step-end infinite; }
-
-/* ── Quick-action buttons (e.g. "Start Simulation", "View Results") ───────── */
-.dashboard-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    margin-top: 0.75rem;
+/* ── Section block ────────────────────────────────────────────────────────── */
+.db-section {
+    margin-bottom: 1.5rem;
 }
 
-.dashboard-action-btn {
-    background: transparent;
-    border: 1px solid var(--color-cyan-border);
-    border-left: 2px solid var(--color-cyan);
-    color: var(--color-text-primary);
-    font-family: var(--font-mono);
-    font-size: 0.8rem;
-    letter-spacing: 0.08em;
-    padding: 0.65rem 1rem;
-    cursor: pointer;
-    text-align: left;
-    border-radius: 0 2px 2px 0;
-    transition: all 0.15s ease;
+.db-section__header {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    text-decoration: none;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-cyan-border2);
 }
 
-.dashboard-action-btn:hover {
-    background: var(--color-cyan-subtle);
+.db-section__label {
+    font-family: var(--font-display);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--color-cyan-dim);
+    text-transform: uppercase;
+}
+
+.db-section__badge {
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 0.1rem 0.45rem;
+    border-radius: 1px;
+    border: 1px solid currentColor;
+}
+
+.db-section__badge--alert {
+    color: var(--color-red);
+    background: var(--color-red-subtle);
+    border-color: var(--color-red-dim);
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+.db-empty {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1rem 0.5rem;
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+}
+
+.db-empty__icon {
+    font-size: 1.1rem;
+    color: var(--color-cyan-border);
+    flex-shrink: 0;
+}
+
+.db-empty__text {
+    line-height: 1.5;
+}
+
+/* ── List + rows ──────────────────────────────────────────────────────────── */
+.db-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.db-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-cyan-border2);
+    border-left: 2px solid var(--color-cyan-border);
+    border-radius: 0 2px 2px 0;
+    transition: border-left-color 0.15s, box-shadow 0.15s;
+}
+
+.db-row--clickable {
+    cursor: pointer;
+}
+
+.db-row--clickable:hover {
     border-left-color: var(--color-cyan);
-    color: var(--color-cyan);
     box-shadow: var(--color-cyan-glow);
 }
 
-.dashboard-action-btn__arrow {
-    margin-left: auto;
-    color: var(--color-cyan-dim);
-    font-size: 0.75rem;
-    transition: transform 0.15s ease;
+.db-row--featured {
+    border-left-color: var(--color-cyan-dim);
 }
 
-.dashboard-action-btn:hover .dashboard-action-btn__arrow {
-    transform: translateX(3px);
-    color: var(--color-cyan);
-}
-
-/* ── Stat readouts (e.g. attempts completed, score average) ───────────────── */
-.dashboard-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-}
-
-.dashboard-stat {
-    background: var(--color-surface-raised);
-    border: 1px solid var(--color-cyan-border2);
-    padding: 0.9rem 1rem;
-    border-radius: 2px;
+.db-row__left {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.2rem;
+    min-width: 0;
 }
 
-.dashboard-stat__num {
+.db-row__title {
+    font-size: 0.875rem;
+    color: var(--color-text-bright);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.db-row__sub {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.02em;
+}
+
+/* ── Tags ─────────────────────────────────────────────────────────────────── */
+.db-row__tag {
     font-family: var(--font-display);
-    font-size: 1.4rem;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 1px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.db-row__tag--pending {
+    color: var(--color-amber);
+    background: var(--color-amber-subtle);
+    border-color: var(--color-amber-dim);
+}
+
+.db-row__tag--go {
+    color: var(--color-cyan);
+    background: var(--color-cyan-subtle);
+    border-color: var(--color-cyan-border);
+}
+
+/* ── Score display ────────────────────────────────────────────────────────── */
+.db-row__score {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--color-cyan);
     letter-spacing: 0.05em;
-    text-shadow: 0 0 16px var(--color-cyan-dim);
-    line-height: 1;
+    flex-shrink: 0;
 }
 
-.dashboard-stat__label {
-    font-family: var(--font-display);
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
+.db-row__score-denom {
+    font-size: 0.65rem;
     color: var(--color-text-secondary);
-    margin-top: 0.1rem;
+    font-weight: 400;
+    letter-spacing: 0.05em;
 }
 
-/* ── Status / notice banners ──────────────────────────────────────────────── */
-.dashboard-notice {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem;
-    background: var(--color-surface-raised);
-    border: 1px solid var(--color-cyan-border2);
-    border-left: 2px solid var(--color-cyan-dim);
-    border-radius: 0 2px 2px 0;
-    font-size: 0.8rem;
-    color: var(--color-text-primary);
-    letter-spacing: 0.03em;
-    line-height: 1.6;
+/* ── Show more ────────────────────────────────────────────────────────────── */
+.db-show-more {
+    background: transparent;
+    border: none;
+    color: var(--color-cyan-dim);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    padding: 0.4rem 0.5rem;
+    text-align: left;
+    transition: color 0.15s;
+}
+.db-show-more:hover {
+    color: var(--color-cyan);
 }
 
-.dashboard-notice--warn {
-    border-left-color: var(--color-amber);
-    color: var(--color-amber);
+/* ── Blink cursor ─────────────────────────────────────────────────────────── */
+.db-blink {
+    animation: db-blink 1s step-end infinite;
 }
-
-.dashboard-notice--error {
-    border-left-color: var(--color-red);
-    color: var(--color-red);
+@keyframes db-blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
 }

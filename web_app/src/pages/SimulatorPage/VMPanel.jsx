@@ -85,47 +85,19 @@ export default function VMPanel({ attemptId, onError }) {
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
+    // VM status is logged only — no UI rendered regardless of state.
     if (vmState === 'idle' || vmState === 'checking') {
-        return (
-            <div className="vm-panel vm-panel--loading">
-                <div className="vm-panel__status">
-                    &gt; INITIALISING FORENSIC WORKSTATION
-                    <span className="sim-feed__blink">_</span>
-                </div>
-            </div>
-        );
+        console.log('[VMPanel] Connecting to workstation...');
+    } else if (vmState === 'starting') {
+        console.log('[VMPanel] Launching virtual machine...');
+    } else if (vmState === 'error') {
+        console.warn('[VMPanel] VM initialisation failed:', error);
+    } else if (vmState === 'ready') {
+        if (vmUrl && !window.__vmWindowOpened) {
+            window.__vmWindowOpened = true;
+            window.open(vmUrl, 'ForensicWorkstation');
+        }
     }
 
-    if (vmState === 'starting') {
-        return (
-            <div className="vm-panel vm-panel--loading">
-                <div className="vm-panel__status">
-                    &gt; LAUNCHING VIRTUAL MACHINE
-                    <span className="sim-feed__blink">_</span>
-                </div>
-                <div className="vm-panel__sub">
-                    This may take a few seconds...
-                </div>
-            </div>
-        );
-    }
-
-    if (vmState === 'error') {
-        return (
-            <div className="vm-panel vm-panel--error">
-                <div className="vm-panel__status">
-                    &gt; VM INITIALISATION FAILED
-                </div>
-                <div className="vm-panel__sub">{error}</div>
-            </div>
-        );
-    }
-
-    // vmState === 'ready'
-    // Open the VM in a new tab and monitor the connection
-    if (vmUrl && !window.__vmWindowOpened) {
-        window.__vmWindowOpened = true;
-        window.open(vmUrl, 'ForensicWorkstation');
-    }
     return null;
 }
