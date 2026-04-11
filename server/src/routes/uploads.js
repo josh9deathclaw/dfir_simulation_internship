@@ -1,6 +1,7 @@
 const express = require("express");
 const multer  = require("multer");
 const path    = require("path");
+const fs      = require("fs");
 const router  = express.Router();
 const { authenticateToken } = require("../middleware/auth");
 
@@ -36,4 +37,31 @@ router.post("/", authenticateToken, upload.single("file"), (req, res) => {
     });
 });
  
+// GET /api/uploads/scenarios/:scenarioId/:filename
+// Serves scenario evidence files. Requires a valid JWT — replaces the old
+// express.static('/uploads') in index.js which was publicly accessible.
+// Path is validated to prevent directory traversal.
+router.get("/scenarios/:scenarioId/:filename", authenticateToken, (req, res) => {
+    const { scenarioId, filename } = req.params;
+
+    // Block directory traversal attempts
+    if (filename.includes("..") || filename.includes("/") || scenarioId.includes("..")) {
+        return res.status(400).json({ message: "Invalid file path." });
+    }
+
+    const filePath = path.join(__dirname, "../../uploads/scenarios", scenarioId, filename);
+
+    // Double-check the resolved path is still inside uploads/
+    const uploadsRoot = path.resolve(path.join(__dirname, "../../uploads"));
+    if (!path.resolve(filePath).startsWith(uploadsRoot)) {
+        return res.status(400).json({ message: "Invalid file path." });
+    }
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found." });
+    }
+
+    res.sendFile(filePath);
+});
+
 module.exports = router;
