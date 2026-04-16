@@ -1,4 +1,4 @@
-// src/components/ScenarioEditor/shared.jsx
+// src/components/ScenarioEditor/CreateEditScenarioLogic.jsx
 import React from "react";
 import PhaseCard from "../CreateScenario/PhaseCard";
 import ScenarioLevelSection from "../CreateScenario/ScenarioLevelSection";
@@ -15,10 +15,10 @@ export function newPhase() {
         _id: uid(),
         title: "", description: "",
         duration_minutes: 30,
+        time_budget: 30,          // narrative: scenario-time unit hard cap per phase
         requires_completion: false,
         expanded: true,
         injects: [], objectives: [], questions: [],
-        decisions: [],
     };
 }
 
@@ -28,16 +28,26 @@ export function newInject(releaseType = "random_in_phase") {
         title: "", description: "",
         file_name: "", file_type: "", file_size: null,
         file_path: "", file_obj: null, upload_status: "idle",
-        // Low-quality version (narrative only, shown after evidence degrades)
+        // Primary file used when quality is high (or always for open-ended)
+        // Low-quality version delivered when evidence has degraded
         file_path_low_quality: "",
-        file_name_low_quality: "", upload_status_low_quality: "idle",
+        file_name_low_quality: "", file_size_low_quality: null,
+        file_type_low_quality: "", upload_status_low_quality: "idle",
+        // Open-ended release fields (unused in narrative, kept on table)
         release_type: releaseType,
         min_delay_minutes: 0, max_delay_minutes: 10,
         guaranteed_release_minutes: "",
         notify_student: true,
-        // Narrative fields
-        lifetime_minutes: "",   // scenario-time minutes before evidence is fully lost
-        volatility: "none",     // 'high' | 'average' | 'none'
+        // Narrative volatility fields
+        lifespan_units: "",        // scenario-time units before evidence is destroyed
+        volatility: "none",        // 'none' | 'average' | 'high'
+        // Narrative acquisition costs (scenario-time units)
+        extraction_cost_full: 5,
+        extraction_cost_live: 2,
+        // Narrative trigger (one per inject)
+        trigger_type: "always",           // 'always' | 'time_elapsed' | 'evidence_extracted'
+        trigger_threshold: "",            // used when trigger_type === 'time_elapsed'
+        trigger_ref_inject_id: "",        // used when trigger_type === 'evidence_extracted'
     };
 }
 
@@ -55,74 +65,33 @@ export function newQuestion(type = "phase_question") {
     };
 }
 
-export function newDecision() {
+// ─── Quality threshold helpers (shared between editor and simulator) ──────────
+
+/**
+ * Returns { degradeAt: number|null, destroyAt: number|null } in scenario-time units.
+ * Both null when volatility === 'none'.
+ */
+export function computeThresholds(lifespan_units, volatility) {
+    if (!lifespan_units || volatility === "none") return { degradeAt: null, destroyAt: null };
+    const mult = volatility === "high" ? 0.25 : 0.5;
     return {
-        _id: uid(), title: "", description: "",
-        // release_at_minutes: scenario time at which this decision appears to the student
-        release_at_minutes: 0,
-        // conditions: key-value pairs that must ALL match attempt_state for this decision
-        // to be shown. Null / empty object means always show.
-        conditions: {},
-        options: [newDecisionOption(), newDecisionOption()],
+        degradeAt: Math.round(lifespan_units * mult),
+        destroyAt: lifespan_units,
     };
 }
 
-export function newDecisionOption() {
-    return {
-        _id: uid(), label: "",
-        outcome_text: "",
-        // Each option has its own time cost — scenario_time += option.time_cost when chosen
-        time_cost_minutes: 0,
-        // state_effect: what this option does when chosen.
-        // { set: { key: value }, unlock: [inject_id, ...], lock: [inject_id, ...] }
-        // All three keys are optional.
-        state_effect: { set: {}, unlock: [], lock: [] },
-    };
-}
-
-// ─── state_effect helpers ─────────────────────────────────────────────────────
-
-// Returns a fresh state_effect object, safe to mutate
-export function emptyStateEffect() {
-    return { set: {}, unlock: [], lock: [] };
-}
-
-// Normalise a state_effect coming from the API (may be null or partial)
-export function normaliseStateEffect(raw) {
-    if (!raw) return emptyStateEffect();
-    return {
-        set:    raw.set    && typeof raw.set === "object" ? raw.set : {},
-        unlock: Array.isArray(raw.unlock) ? raw.unlock : [],
-        lock:   Array.isArray(raw.lock)   ? raw.lock   : [],
-    };
-}
-
-// Normalise conditions coming from the API (may be null or partial)
-export function normaliseConditions(raw) {
-    if (!raw || typeof raw !== "object") return {};
-    return raw;
-}
-
-// ─── Volatility helpers (shared between editor and simulator) ─────────────────
-export const VOLATILITY_MULTIPLIERS = { high: 0.25, average: 0.5, none: null };
-
-// Returns { status: 'stable'|'at_risk'|'critical'|'lost', qualityLabel: 'High'|'Low'|'Lost' }
-export function getEvidenceStatus(inject, scenarioTimeMinutes) {
-    const { lifetime_minutes, volatility } = inject;
-    if (!lifetime_minutes || volatility === "none") {
-        return { status: "stable", qualityLabel: "High" };
-    }
-    const mult = VOLATILITY_MULTIPLIERS[volatility];
-    if (!mult) return { status: "stable", qualityLabel: "High" };
-
-    const degradeAt = lifetime_minutes * mult;   // scenario time when quality drops
-    const lostAt    = lifetime_minutes;           // scenario time when evidence is gone
-
-    if (scenarioTimeMinutes >= lostAt)           return { status: "lost",     qualityLabel: "Lost" };
-    if (scenarioTimeMinutes >= degradeAt)         return { status: "critical",  qualityLabel: "Low" };
-    // Warn when within 25% of degrade threshold
-    if (scenarioTimeMinutes >= degradeAt * 0.75) return { status: "at_risk",  qualityLabel: "High" };
-    return { status: "stable", qualityLabel: "High" };
+/**
+ * Returns 'high' | 'low' | 'destroyed' for a discovered inject at a given
+ * scenario time.  elapsed = scenarioTime - discoveredAt.
+ */
+export function computeQuality(inject, scenarioTime, discoveredAt = 0) {
+    const { lifespan_units, volatility } = inject;
+    if (!lifespan_units || volatility === "none") return "high";
+    const elapsed = scenarioTime - discoveredAt;
+    const { degradeAt, destroyAt } = computeThresholds(lifespan_units, volatility);
+    if (elapsed >= destroyAt) return "destroyed";
+    if (elapsed >= degradeAt) return "low";
+    return "high";
 }
 
 // ─── Primitive UI components ──────────────────────────────────────────────────
@@ -286,7 +255,7 @@ export function StepScenario({ mode, phases, setPhases, scenarioLevel, setScenar
             <div className="cs-step-heading">
                 <h2>Scenario Builder</h2>
                 <p>{isNarrative
-                    ? "Each phase holds injects (with lifetime + volatility), questions, and decision points. Decisions advance scenario time and can unlock or degrade evidence."
+                    ? "Each phase holds evidence items with volatility and trigger rules, plus phase questions. Students extract evidence using scenario-time units."
                     : "Add phases to structure your scenario. Each phase holds its own injects, objectives, and questions."
                 }</p>
             </div>
@@ -323,9 +292,8 @@ export function StepScenario({ mode, phases, setPhases, scenarioLevel, setScenar
 export function StepReview({ mode, details, phases, scenarioLevel, classes, isEdit }) {
     const classNames = details.class_ids
         .map((id) => classes.find((c) => c.id === id)?.name).filter(Boolean);
-    const diffColor      = { easy: "#52b788", medium: "#f4a261", hard: "#e63946" };
-    const totalMins      = phases.reduce((s, p) => s + (p.duration_minutes || 0), 0);
-    const totalDecisions = phases.reduce((s, p) => s + (p.decisions?.length || 0), 0);
+    const diffColor  = { easy: "#52b788", medium: "#f4a261", hard: "#e63946" };
+    const totalMins  = phases.reduce((s, p) => s + (p.duration_minutes || 0), 0);
 
     return (
         <div className="cs-step-body">
@@ -363,22 +331,23 @@ export function StepReview({ mode, details, phases, scenarioLevel, classes, isEd
                                 <div className="cs-review-phase__head">
                                     <span className="cs-review-phase__num">Phase {i + 1}</span>
                                     <span className="cs-review-phase__name">{p.title || "Untitled"}</span>
-                                    <span className="cs-chip">{p.duration_minutes}min</span>
+                                    <span className="cs-chip">{p.duration_minutes}min lab</span>
+                                    {mode === "narrative" && (
+                                        <span className="cs-chip cs-chip--narrative">{p.time_budget ?? 30}u budget</span>
+                                    )}
                                     {p.requires_completion && <span className="cs-chip cs-chip--gate">Gated</span>}
                                 </div>
                                 <div className="cs-review-phase__items">
-                                    {p.injects.length > 0     && <span className="cs-review-tag">{p.injects.length} inject{p.injects.length !== 1 ? "s" : ""}</span>}
-                                    {p.objectives?.length > 0 && <span className="cs-review-tag">{p.objectives.length} objective{p.objectives.length !== 1 ? "s" : ""}</span>}
-                                    {p.questions.length > 0   && <span className="cs-review-tag">{p.questions.length} question{p.questions.length !== 1 ? "s" : ""}</span>}
-                                    {p.decisions?.length > 0  && <span className="cs-review-tag cs-review-tag--decision">{p.decisions.length} decision{p.decisions.length !== 1 ? "s" : ""}</span>}
-                                    {(p.injects.length + (p.objectives?.length || 0) + p.questions.length + (p.decisions?.length || 0)) === 0 && (
+                                    {p.injects.length > 0   && <span className="cs-review-tag">{p.injects.length} evidence item{p.injects.length !== 1 ? "s" : ""}</span>}
+                                    {p.questions.length > 0 && <span className="cs-review-tag">{p.questions.length} question{p.questions.length !== 1 ? "s" : ""}</span>}
+                                    {(p.injects.length + p.questions.length) === 0 && (
                                         <span className="cs-review-empty-inline">No items</span>
                                     )}
                                 </div>
                             </div>
                         ))}
                         <div className="cs-review-row cs-review-row--total">
-                            <span>Total phase time</span><span>{totalMins} min</span>
+                            <span>Total lab time</span><span>{totalMins} min</span>
                         </div>
                     </>
                 )}
@@ -389,12 +358,6 @@ export function StepReview({ mode, details, phases, scenarioLevel, classes, isEd
                     <div className="cs-review-row"><span>Free-roaming injects</span><span>{scenarioLevel.injects.length}</span></div>
                     <div className="cs-review-row"><span>Scenario objectives</span><span>{scenarioLevel.objectives.length}</span></div>
                     <div className="cs-review-row"><span>End-of-scenario questions</span><span>{scenarioLevel.questions.length}</span></div>
-                </div>
-            )}
-            {mode === "narrative" && (
-                <div className="cs-review-card">
-                    <div className="cs-review-card__title">Narrative engine</div>
-                    <div className="cs-review-row"><span>Total decision points</span><span>{totalDecisions}</span></div>
                 </div>
             )}
             <div className="cs-review-notice">
@@ -409,67 +372,82 @@ export function StepReview({ mode, details, phases, scenarioLevel, classes, isEd
 // ─── Validation ───────────────────────────────────────────────────────────────
 export function validate(stepId, { details, phases, mode }) {
     const errors = [];
+
     if (stepId === "details") {
         if (!details.title.trim())        errors.push("Title is required.");
         if (!details.difficulty)          errors.push("Difficulty is required.");
         if (details.class_ids.length < 1) errors.push("Assign this scenario to at least one class.");
     }
+
     if (stepId === "scenario") {
         phases.forEach((p, i) => {
-            if (!p.title.trim()) errors.push(`Phase ${i + 1}: title is required.`);
+            if (!p.title.trim())
+                errors.push(`Phase ${i + 1}: title is required.`);
             if (!p.duration_minutes || p.duration_minutes < 1)
                 errors.push(`Phase ${i + 1}: duration must be at least 1 minute.`);
+            if (mode === "narrative" && (!p.time_budget || p.time_budget < 1))
+                errors.push(`Phase ${i + 1}: scenario time budget must be at least 1 unit.`);
+
             p.injects.forEach((inj, j) => {
-                if (!inj.title.trim()) errors.push(`Phase ${i + 1} › Inject ${j + 1}: title is required.`);
-                if (inj.upload_status === "uploading") errors.push(`Phase ${i + 1} › Inject ${j + 1}: file still uploading.`);
-                if (inj.upload_status === "error")     errors.push(`Phase ${i + 1} › Inject ${j + 1}: upload failed.`);
-                if (mode === "narrative" && inj.volatility !== "none" && !inj.lifetime_minutes)
-                    errors.push(`Phase ${i + 1} › Inject ${j + 1}: lifetime required when volatility is set.`);
-                if (mode === "narrative" && inj.volatility !== "none" && inj.lifetime_minutes &&
-                    inj.upload_status_low_quality === "idle")
-                    errors.push(`Phase ${i + 1} › Inject ${j + 1}: low-quality file required when volatility is set.`);
-                if (inj.upload_status_low_quality === "uploading")
-                    errors.push(`Phase ${i + 1} › Inject ${j + 1}: low-quality file still uploading.`);
-                if (inj.upload_status_low_quality === "error")
-                    errors.push(`Phase ${i + 1} › Inject ${j + 1}: low-quality file upload failed.`);
+                const label = `Phase ${i + 1} › Evidence ${j + 1}`;
+
+                if (!inj.title.trim())
+                    errors.push(`${label}: title is required.`);
+                if (inj.upload_status === "uploading")
+                    errors.push(`${label}: primary file still uploading.`);
+                if (inj.upload_status === "error")
+                    errors.push(`${label}: primary file upload failed.`);
+
+                if (mode === "narrative") {
+                    // Volatility requires lifespan + low-quality file
+                    if (inj.volatility !== "none" && !inj.lifespan_units)
+                        errors.push(`${label}: lifespan (units) required when volatility is set.`);
+                    if (inj.volatility !== "none" && inj.lifespan_units &&
+                        inj.upload_status_low_quality === "idle")
+                        errors.push(`${label}: low-quality file required when volatility is set.`);
+                    if (inj.upload_status_low_quality === "uploading")
+                        errors.push(`${label}: low-quality file still uploading.`);
+                    if (inj.upload_status_low_quality === "error")
+                        errors.push(`${label}: low-quality file upload failed.`);
+
+                    // Trigger validation
+                    if (inj.trigger_type === "time_elapsed" && !inj.trigger_threshold)
+                        errors.push(`${label}: time threshold required for "time elapsed" trigger.`);
+                    if (inj.trigger_type === "evidence_extracted" && !inj.trigger_ref_inject_id)
+                        errors.push(`${label}: reference evidence item required for "evidence extracted" trigger.`);
+                }
             });
+
             p.objectives?.forEach((obj, j) => {
-                if (!obj.description.trim()) errors.push(`Phase ${i + 1} › Objective ${j + 1}: description is required.`);
+                if (!obj.description.trim())
+                    errors.push(`Phase ${i + 1} › Objective ${j + 1}: description is required.`);
             });
             p.questions.forEach((q, j) => {
-                if (!q.question_text.trim()) errors.push(`Phase ${i + 1} › Question ${j + 1}: text is required.`);
+                if (!q.question_text.trim())
+                    errors.push(`Phase ${i + 1} › Question ${j + 1}: text is required.`);
             });
-            if (mode === "narrative") {
-                p.decisions?.forEach((d, j) => {
-                    if (!d.title.trim()) errors.push(`Phase ${i + 1} › Decision ${j + 1}: title is required.`);
-                    d.options.forEach((opt, k) => {
-                        if (!opt.label.trim()) errors.push(`Phase ${i + 1} › Decision ${j + 1} › Option ${k + 1}: label is required.`);
-                    });
-                });
-            }
         });
     }
+
     return errors;
 }
 
 // ─── Payload builder ──────────────────────────────────────────────────────────
 export function buildPayload({ details, phases, scenarioLevel, mode }) {
-    const allInjects = [], allObjectives = [], allQuestions = [], allDecisions = [];
+    const allInjects = [], allObjectives = [], allQuestions = [];
 
     phases.forEach((phase) => {
         phase.injects.forEach((inj) =>
-            allInjects.push({ ...inj, _phaseId: phase._id, file_obj: undefined }));
+            allInjects.push({ ...inj, _phaseId: phase._id, file_obj: null }));
         phase.objectives?.forEach((obj) =>
             allObjectives.push({ ...obj, _phaseId: phase._id }));
         phase.questions.forEach((q) =>
             allQuestions.push({ ...q, _phaseId: phase._id }));
-        phase.decisions?.forEach((d, i) =>
-            allDecisions.push({ ...d, _phaseId: phase._id, order_index: i }));
     });
 
     if (mode === "open_ended") {
         scenarioLevel.injects.forEach((inj) =>
-            allInjects.push({ ...inj, _phaseId: null, file_obj: undefined }));
+            allInjects.push({ ...inj, _phaseId: null, file_obj: null }));
         scenarioLevel.objectives.forEach((obj) =>
             allObjectives.push({ ...obj, _phaseId: null }));
         scenarioLevel.questions.forEach((q) =>
@@ -482,69 +460,80 @@ export function buildPayload({ details, phases, scenarioLevel, mode }) {
         injects:    allInjects,
         objectives: allObjectives,
         questions:  allQuestions,
-        decisions:  allDecisions,
+        // No decisions key — removed from backend
     };
 }
 
 // ─── DB → form state mapper ───────────────────────────────────────────────────
 export function mapApiResponseToState(data) {
-    const { scenario, phases, injects, objectives, questions, decisions = [] } = data;
+    const { scenario, phases, injects, objectives = [], questions, triggers = [] } = data;
+
+    // Build a trigger lookup by inject_id for O(1) access
+    const triggerByInjectId = {};
+    triggers.forEach((t) => { triggerByInjectId[t.inject_id] = t; });
 
     const mappedPhases = phases.map((p) => {
         const _id = uid();
         return {
             _id, _dbId: p.id,
-            title: p.title, description: p.description || "",
+            title: p.title,
+            description: p.description || "",
             duration_minutes: p.duration_minutes,
+            time_budget: p.time_budget ?? 30,
             requires_completion: p.requires_completion,
             expanded: false,
-            decisions: decisions
-                .filter((d) => d.phase_id === p.id)
-                .map((d) => ({
-                    _id: uid(), _dbId: d.id,
-                    title: d.title, description: d.description || "",
-                    release_at_minutes: d.release_at_minutes ?? 0,
-                    conditions: normaliseConditions(d.conditions),
-                    options: (d.options || []).map((opt) => ({
-                        _id: uid(), _dbId: opt.id,
-                        label: opt.label,
-                        outcome_text: opt.outcome_text || "",
-                        time_cost_minutes: opt.time_cost_minutes ?? 0,
-                        state_effect: normaliseStateEffect(opt.state_effect),
-                    })),
-                })),
             injects: injects
                 .filter((inj) => inj.phase_id === p.id)
-                .map((inj) => ({
-                    _id: uid(),
-                    title: inj.title, description: inj.description || "",
-                    file_name: inj.file_path ? inj.file_path.split("/").pop() : "",
-                    file_type: inj.file_type || "", file_size: null,
-                    file_path: inj.file_path || "", file_obj: null,
-                    upload_status: inj.file_path ? "done" : "idle",
-                    file_path_low_quality: inj.file_path_low_quality || "",
-                    file_name_low_quality: inj.file_path_low_quality
-                        ? inj.file_path_low_quality.split("/").pop() : "",
-                    upload_status_low_quality: inj.file_path_low_quality ? "done" : "idle",
-                    release_type: inj.release_type,
-                    min_delay_minutes: inj.min_delay_minutes,
-                    max_delay_minutes: inj.max_delay_minutes,
-                    guaranteed_release_minutes: inj.guaranteed_release_minutes ?? "",
-                    notify_student: inj.notify_student,
-                    lifetime_minutes: inj.lifetime_minutes || "",
-                    volatility: inj.volatility || "none",
-                })),
+                .map((inj) => {
+                    const trigger = triggerByInjectId[inj.id] || {};
+                    return {
+                        _id: uid(),
+                        title: inj.title,
+                        description: inj.description || "",
+                        // Primary file
+                        file_name: inj.file_path ? inj.file_path.split("/").pop() : "",
+                        file_type: inj.file_type || "", file_size: null,
+                        file_path: inj.file_path || "", file_obj: null,
+                        upload_status: inj.file_path ? "done" : "idle",
+                        // Low-quality file
+                        file_path_low_quality: inj.file_path_low_quality || "",
+                        file_name_low_quality: inj.file_path_low_quality
+                            ? inj.file_path_low_quality.split("/").pop() : "",
+                        file_size_low_quality: null,
+                        file_type_low_quality: "",
+                        upload_status_low_quality: inj.file_path_low_quality ? "done" : "idle",
+                        // Open-ended release fields
+                        release_type: inj.release_type || "random_in_phase",
+                        min_delay_minutes: inj.min_delay_minutes ?? 0,
+                        max_delay_minutes: inj.max_delay_minutes ?? 10,
+                        guaranteed_release_minutes: inj.guaranteed_release_minutes ?? "",
+                        notify_student: inj.notify_student !== false,
+                        // Narrative volatility
+                        lifespan_units: inj.lifespan_units || "",
+                        volatility: inj.volatility || "none",
+                        // Narrative acquisition costs
+                        extraction_cost_full: inj.extraction_cost_full ?? 5,
+                        extraction_cost_live: inj.extraction_cost_live ?? 2,
+                        // Trigger
+                        trigger_type: trigger.trigger_type || "always",
+                        trigger_threshold: trigger.threshold_value ?? "",
+                        trigger_ref_inject_id: trigger.ref_inject_id || "",
+                    };
+                }),
             objectives: [],
             questions: questions
                 .filter((q) => q.phase_id === p.id)
                 .map((q) => ({
                     _id: uid(),
-                    question_text: q.question_text, question_type: q.question_type,
-                    blocks_progression: q.blocks_progression, max_score: q.max_score ?? 10,
+                    question_text: q.question_text,
+                    question_type: q.question_type,
+                    blocks_progression: q.blocks_progression,
+                    max_score: q.max_score ?? 10,
                 })),
         };
     });
 
+    // Scenario-level items (open-ended only)
     const scenarioLevel = {
         injects: injects.filter((inj) => inj.phase_id === null).map((inj) => ({
             _id: uid(), title: inj.title, description: inj.description || "",
@@ -555,13 +544,20 @@ export function mapApiResponseToState(data) {
             file_path_low_quality: inj.file_path_low_quality || "",
             file_name_low_quality: inj.file_path_low_quality
                 ? inj.file_path_low_quality.split("/").pop() : "",
+            file_size_low_quality: null, file_type_low_quality: "",
             upload_status_low_quality: inj.file_path_low_quality ? "done" : "idle",
-            release_type: inj.release_type,
-            min_delay_minutes: inj.min_delay_minutes, max_delay_minutes: inj.max_delay_minutes,
+            release_type: inj.release_type || "random_in_phase",
+            min_delay_minutes: inj.min_delay_minutes ?? 0,
+            max_delay_minutes: inj.max_delay_minutes ?? 10,
             guaranteed_release_minutes: inj.guaranteed_release_minutes ?? "",
-            notify_student: inj.notify_student,
-            lifetime_minutes: inj.lifetime_minutes || "",
+            notify_student: inj.notify_student !== false,
+            lifespan_units: inj.lifespan_units || "",
             volatility: inj.volatility || "none",
+            extraction_cost_full: inj.extraction_cost_full ?? 5,
+            extraction_cost_live: inj.extraction_cost_live ?? 2,
+            trigger_type: "always",
+            trigger_threshold: "",
+            trigger_ref_inject_id: "",
         })),
         objectives: objectives.map((obj) => ({
             _id: uid(), description: obj.description, objective_type: obj.objective_type,
@@ -576,7 +572,8 @@ export function mapApiResponseToState(data) {
 
     return {
         details: {
-            title: scenario.title, description: scenario.description || "",
+            title: scenario.title,
+            description: scenario.description || "",
             difficulty: scenario.difficulty,
             estimated_time_minutes: scenario.estimated_time_minutes || "",
             class_ids: [],
@@ -590,6 +587,6 @@ export function mapApiResponseToState(data) {
 // ─── Step definitions ─────────────────────────────────────────────────────────
 export const STEPS = [
     { id: "details",  label: "Details",       desc: "Name, class, difficulty" },
-    { id: "scenario", label: "Scenario",       desc: "Phases, injects, objectives" },
+    { id: "scenario", label: "Scenario",       desc: "Phases, evidence, questions" },
     { id: "review",   label: "Review & Save",  desc: "Confirm and save" },
 ];

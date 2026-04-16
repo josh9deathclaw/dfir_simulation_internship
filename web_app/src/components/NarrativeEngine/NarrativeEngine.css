@@ -1,483 +1,477 @@
 /* src/components/NarrativeEngine/NarrativeEngine.css */
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Shares the sim-page dark terminal aesthetic from SimulatorPage.css          */
+/* ─────────────────────────────────────────────────────────────────────────── */
 
-/* ─── Evidence panels ────────────────────────────────────────────────────────── */
-.ne-panels {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    padding: 12px;
-    height: 100%;
-    overflow: hidden;
-}
-
-.ne-panel {
+/* ── Engine root ─────────────────────────────────────────────────────────── */
+.nar-engine {
     display: flex;
     flex-direction: column;
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    overflow: hidden;
-    background: rgba(0,0,0,0.3);
-}
-
-.ne-panel__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.03);
-}
-
-.ne-panel__title {
-    font-family: monospace;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.5);
-}
-
-.ne-panel--discovered .ne-panel__title { color: #f4a261; }
-.ne-panel--extracted  .ne-panel__title { color: #52b788; }
-
-.ne-panel__count {
-    font-family: monospace;
-    font-size: 11px;
-    color: rgba(255,255,255,0.3);
-    background: rgba(255,255,255,0.06);
-    padding: 2px 8px;
-    border-radius: 999px;
-}
-
-.ne-panel__body {
     flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.ne-panel__empty {
-    font-family: monospace;
-    font-size: 12px;
-    color: rgba(255,255,255,0.2);
-    text-align: center;
-    padding: 24px 0;
-}
-
-/* ─── Evidence cards ─────────────────────────────────────────────────────────── */
-.ne-evidence-card {
-    border-radius: 8px;
-    padding: 12px;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.03);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    transition: border-color 0.3s;
-}
-
-.ne-evidence-card--stable   { border-color: rgba(82,183,136,0.2); }
-.ne-evidence-card--at_risk  { border-color: rgba(244,162,97,0.3); }
-.ne-evidence-card--critical { border-color: rgba(230,57,70,0.4); }
-.ne-evidence-card--lost     { opacity: 0.4; border-color: rgba(255,255,255,0.05); }
-.ne-evidence-card--extracted { border-color: rgba(82,183,136,0.2); }
-
-.ne-evidence-card__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.ne-evidence-card__name {
-    font-family: monospace;
-    font-size: 13px;
-    font-weight: 600;
-    color: rgba(255,255,255,0.85);
-}
-
-.ne-evidence-card__desc {
-    font-size: 12px;
-    color: rgba(255,255,255,0.4);
-    margin: 0;
-    line-height: 1.4;
-}
-
-.ne-evidence-card__badge {
-    font-family: monospace;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid currentColor;
-    flex-shrink: 0;
-}
-
-.ne-evidence-card__badge--lost {
-    color: #666;
-    border-color: #444;
-}
-
-.ne-evidence-card__frozen,
-.ne-evidence-card__stable {
-    font-family: monospace;
-    font-size: 11px;
-    color: rgba(255,255,255,0.25);
-}
-
-.ne-evidence-card__frozen { color: #52b788; }
-
-/* ─── Extract button ─────────────────────────────────────────────────────────── */
-.ne-extract-btn {
-    font-family: monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    padding: 4px 10px;
-    border-radius: 4px;
-    border: 1px solid rgba(76,201,240,0.5);
-    background: rgba(76,201,240,0.08);
-    color: #4cc9f0;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-    flex-shrink: 0;
-}
-
-.ne-extract-btn:hover:not(:disabled) {
-    background: rgba(76,201,240,0.15);
-    border-color: #4cc9f0;
-}
-
-.ne-extract-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* ─── Volatility bar ─────────────────────────────────────────────────────────── */
-.ne-vol-bar-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.ne-vol-bar-track {
+    min-width: 0;
+    gap: 0;
+    overflow: hidden;
     position: relative;
-    height: 6px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.08);
-    overflow: visible;
 }
 
-.ne-vol-bar-fill {
-    position: absolute;
-    left: 0; top: 0; height: 100%;
-    border-radius: 999px;
-    transition: width 0.6s ease, background 0.4s;
+/* ── Token bar ───────────────────────────────────────────────────────────── */
+.nar-token-bar {
+    padding: 10px 16px 8px;
+    background: #0d0d0d;
+    border-bottom: 1px solid #1e1e1e;
+    flex-shrink: 0;
 }
 
-/* Threshold marker line */
-.ne-vol-marker {
-    position: absolute;
-    top: -3px;
-    width: 2px;
-    height: 12px;
-    background: rgba(255,255,255,0.3);
-    border-radius: 1px;
-    transform: translateX(-50%);
+.nar-token-bar__label {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
 }
 
-.ne-vol-bar-labels {
+.nar-token-bar__slash {
+    color: #52b788;
+}
+
+.nar-token-bar__track {
+    height: 4px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.nar-token-bar__fill {
+    height: 100%;
+    background: #52b788;
+    border-radius: 2px;
+    transition: width 0.3s ease, background 0.3s ease;
+}
+
+.nar-token-bar--critical .nar-token-bar__fill {
+    background: #f4a261;
+}
+
+.nar-token-bar--exhausted .nar-token-bar__fill {
+    background: #e63946;
+}
+
+.nar-token-bar__counts {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-}
-
-.ne-vol-status {
-    font-family: monospace;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
     font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
 }
 
-.ne-vol-quality {
-    font-family: monospace;
-    font-size: 10px;
-    color: rgba(255,255,255,0.3);
+.nar-token-bar__used {
+    color: #555;
 }
 
-/* ─── Scenario time clock ─────────────────────────────────────────────────────── */
-.ne-scenario-clock {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 16px;
-    height: 36px;
-    border-top: 1px solid rgba(255,255,255,0.06);
-    background: rgba(0,0,0,0.3);
-}
-
-.ne-scenario-clock__label {
-    font-family: monospace;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.3);
-}
-
-.ne-scenario-clock__value {
-    font-family: monospace;
-    font-size: 14px;
-    font-weight: 700;
+.nar-token-bar__used--critical {
     color: #f4a261;
 }
 
-/* ─── Decision modal ─────────────────────────────────────────────────────────── */
-.ne-decision-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(4px);
-    z-index: 200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
+.nar-token-bar__left {
+    color: #52b788;
 }
 
-.ne-decision-modal {
-    width: 100%;
-    max-width: 560px;
-    background: #0d1117;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
-    overflow: hidden;
+.nar-token-bar__left--zero {
+    color: #e63946;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+
+/* ── Two-column layout ───────────────────────────────────────────────────── */
+.nar-columns {
     display: flex;
-    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     gap: 0;
 }
 
-.ne-decision-timer-track {
-    height: 4px;
-    background: rgba(255,255,255,0.08);
-    width: 100%;
+.nar-col {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
-.ne-decision-timer-fill {
-    height: 100%;
-    transition: width 1s linear, background 0.3s;
+.nar-col--left {
+    flex: 1.4;
+    border-right: 1px solid #1a1a1a;
 }
 
-.ne-decision-timer-fill--normal   { background: #52b788; }
-.ne-decision-timer-fill--warning  { background: #f4a261; }
-.ne-decision-timer-fill--critical { background: #e63946; }
+.nar-col--right {
+    flex: 1;
+}
 
-.ne-decision-header {
+.nar-col__header {
+    padding: 10px 14px 8px;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid #1a1a1a;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px 4px;
+    gap: 8px;
 }
 
-.ne-decision-label {
-    font-family: monospace;
-    font-size: 11px;
-    font-weight: 700;
+.nar-col__slash {
+    color: #52b788;
+}
+
+.nar-col__pending {
+    margin-left: auto;
+    color: #f4a261;
+    font-size: 9px;
+    border: 1px solid #f4a26155;
+    padding: 1px 6px;
+    border-radius: 2px;
     letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.4);
 }
 
-.ne-decision-countdown {
-    font-family: monospace;
-    font-size: 22px;
-    font-weight: 700;
-    transition: color 0.3s;
-}
-
-.ne-decision-countdown--normal   { color: #52b788; }
-.ne-decision-countdown--warning  { color: #f4a261; }
-.ne-decision-countdown--critical { color: #e63946; animation: ne-pulse 0.5s ease-in-out infinite alternate; }
-
-@keyframes ne-pulse { to { opacity: 0.6; } }
-
-.ne-decision-title {
-    font-size: 18px;
-    font-weight: 600;
-    color: #fff;
-    padding: 8px 20px 0;
-    margin: 0;
-    line-height: 1.3;
-}
-
-.ne-decision-desc {
-    font-size: 13px;
-    color: rgba(255,255,255,0.5);
-    padding: 6px 20px 0;
-    margin: 0;
-    line-height: 1.5;
-}
-
-.ne-decision-options {
+.nar-col__list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 10px 20px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 16px 20px 20px;
 }
 
-.ne-decision-option {
-    text-align: left;
-    padding: 14px 16px;
-    border-radius: 8px;
-    border: 1px solid rgba(255,255,255,0.1);
-    background: rgba(255,255,255,0.04);
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
+.nar-col__list::-webkit-scrollbar { width: 4px; }
+.nar-col__list::-webkit-scrollbar-track { background: transparent; }
+.nar-col__list::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+.nar-col__empty {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 11px;
+    color: #333;
+    letter-spacing: 0.08em;
+    text-align: center;
+    padding: 24px;
 }
 
-.ne-decision-option:hover:not(:disabled) {
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.2);
+.nar-col__empty-icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    opacity: 0.3;
 }
 
-.ne-decision-option--selected {
-    border-color: #4cc9f0;
-    background: rgba(76,201,240,0.1);
+.nar-col__empty-sub {
+    font-size: 10px;
+    color: #2a2a2a;
+    margin-top: 2px;
 }
 
-.ne-decision-option:disabled {
+/* ── Evidence cards (shared base) ────────────────────────────────────────── */
+.nar-card {
+    background: #0d0d0d;
+    border: 1px solid #1e1e1e;
+    border-radius: 3px;
+    padding: 10px 12px 12px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s ease;
+}
+
+.nar-card__scanline {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #52b78820, transparent);
+    pointer-events: none;
+}
+
+.nar-card--discovered {
+    border-color: #1e1e1e;
+}
+
+.nar-card--discovered:not(.nar-card--destroyed) {
+    border-left: 2px solid #52b788;
+}
+
+.nar-card--destroyed {
+    border-left: 2px solid #e6394640;
     opacity: 0.6;
+}
+
+.nar-card--extracted {
+    border-left: 2px solid #444;
+    opacity: 0.85;
+}
+
+.nar-card__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.nar-card__prompt {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 11px;
+    color: #52b788;
+    flex-shrink: 0;
+}
+
+.nar-card--extracted .nar-card__prompt {
+    color: #444;
+}
+
+.nar-card__title {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 12px;
+    color: #ccc;
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nar-card__desc {
+    font-size: 11px;
+    color: #555;
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.nar-card__file {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    color: #3a3a3a;
+    margin-bottom: 8px;
+}
+
+.nar-card__file-name {
+    color: #444;
+}
+
+.nar-card__countdown {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    color: #f4a261;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+.nar-card__countdown--urgent {
+    color: #e63946;
+    font-weight: 700;
+}
+
+.nar-card__destroyed-msg {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    color: #e6394680;
+    letter-spacing: 0.08em;
+    padding-top: 4px;
+}
+
+.nar-card__budget-msg {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    color: #f4a26180;
+    letter-spacing: 0.08em;
+    padding-top: 4px;
+}
+
+.nar-card__vm-note {
+    font-size: 10px;
+    color: #2e2e2e;
+    margin-top: 6px;
+    font-style: italic;
+}
+
+/* ── Quality badge ───────────────────────────────────────────────────────── */
+.nar-badge {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+    border: 1px solid;
+    flex-shrink: 0;
+}
+
+.nar-badge--high {
+    color: #52b788;
+    border-color: #52b78840;
+    background: #52b78810;
+}
+
+.nar-badge--low {
+    color: #f4a261;
+    border-color: #f4a26140;
+    background: #f4a26110;
+}
+
+.nar-badge--destroyed {
+    color: #e63946;
+    border-color: #e6394640;
+    background: #e6394610;
+}
+
+.nar-badge--extracted {
+    /* base for extracted cards — quality sub-class overrides color */
+}
+
+/* ── Action buttons ──────────────────────────────────────────────────────── */
+.nar-card__actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.nar-action-btn {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    padding: 5px 10px;
+    border-radius: 2px;
+    border: 1px solid #2a2a2a;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    flex: 1;
+    justify-content: space-between;
+    min-width: 0;
+}
+
+.nar-action-btn:disabled {
     cursor: not-allowed;
 }
 
-.ne-decision-option__label {
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
+.nar-action-btn--full {
+    color: #444;
+    border-color: #2a2a2a;
 }
 
-.ne-decision-option__desc {
-    font-size: 12px;
-    color: rgba(255,255,255,0.45);
+.nar-action-btn--full.nar-action-btn--ready {
+    color: #52b788;
+    border-color: #52b78840;
 }
 
-.ne-decision-option__meta {
+.nar-action-btn--full.nar-action-btn--ready:hover {
+    background: #52b78810;
+    border-color: #52b78880;
+}
+
+.nar-action-btn--live {
+    color: #444;
+    border-color: #2a2a2a;
+}
+
+.nar-action-btn--live.nar-action-btn--ready {
+    color: #f4a261;
+    border-color: #f4a26140;
+}
+
+.nar-action-btn--live.nar-action-btn--ready:hover {
+    background: #f4a26110;
+    border-color: #f4a26180;
+}
+
+.nar-action-btn--disabled {
+    opacity: 0.35;
+}
+
+.nar-action-btn__label {
+    flex: 1;
+    text-align: left;
+}
+
+.nar-action-btn__cost {
+    color: inherit;
+    opacity: 0.6;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+/* ── Toast stack ─────────────────────────────────────────────────────────── */
+.nar-toast-stack {
+    position: absolute;
+    top: 60px;
+    right: 12px;
+    z-index: 200;
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 4px;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+    max-width: 300px;
 }
 
-.ne-decision-option__time {
-    font-family: monospace;
-    font-size: 11px;
+.nar-toast {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 10px;
+    padding: 8px 10px;
+    border-radius: 2px;
+    border: 1px solid;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: all;
+    animation: nar-toast-in 0.2s ease;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+}
+
+@keyframes nar-toast-in {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.nar-toast--success {
+    background: #0d1a12;
+    border-color: #52b78850;
+    color: #52b788;
+}
+
+.nar-toast--warn {
+    background: #1a1200;
+    border-color: #f4a26150;
     color: #f4a261;
 }
 
-.ne-decision-option__score--pos { font-family: monospace; font-size: 11px; color: #52b788; }
-.ne-decision-option__score--neg { font-family: monospace; font-size: 11px; color: #e63946; }
-
-/* ─── Feedback card ──────────────────────────────────────────────────────────── */
-.ne-feedback-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 200;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
+.nar-toast--error {
+    background: #1a0d0d;
+    border-color: #e6394650;
+    color: #e63946;
 }
 
-.ne-feedback-card {
-    width: 100%;
-    max-width: 480px;
-    background: #0d1117;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+.nar-toast--info {
+    background: #0d0d0d;
+    border-color: #333;
+    color: #666;
 }
 
-.ne-feedback-header {
-    display: flex;
-    align-items: center;
-}
-
-.ne-feedback-label {
-    font-family: monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: rgba(255,255,255,0.4);
-}
-
-.ne-feedback-outcome {
-    font-size: 14px;
-    color: rgba(255,255,255,0.8);
-    margin: 0;
-    line-height: 1.5;
-}
-
-.ne-feedback-section {
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.ne-feedback-section--ok     { background: rgba(82,183,136,0.1); border: 1px solid rgba(82,183,136,0.2); }
-.ne-feedback-section--warn   { background: rgba(244,162,97,0.1); border: 1px solid rgba(244,162,97,0.25); }
-.ne-feedback-section--danger { background: rgba(230,57,70,0.1);  border: 1px solid rgba(230,57,70,0.25); }
-
-.ne-feedback-section-title {
-    font-family: monospace;
-    font-size: 12px;
-    font-weight: 700;
-    color: rgba(255,255,255,0.6);
-}
-
-.ne-feedback-item {
-    display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-    color: rgba(255,255,255,0.7);
-}
-
-.ne-feedback-item__status {
-    font-family: monospace;
-    font-size: 11px;
-    color: rgba(255,255,255,0.4);
-}
-
-.ne-feedback-dismiss {
-    font-family: monospace;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    padding: 12px;
-    border-radius: 6px;
-    border: 1px solid rgba(76,201,240,0.4);
-    background: rgba(76,201,240,0.08);
-    color: #4cc9f0;
+.nar-toast__close {
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.5;
     cursor: pointer;
-    transition: background 0.15s;
-    align-self: flex-end;
+    font-size: 10px;
+    padding: 0;
+    flex-shrink: 0;
+    line-height: 1;
 }
 
-.ne-feedback-dismiss:hover {
-    background: rgba(76,201,240,0.15);
-}
-
-/* ─── Volatility preview text in editor ──────────────────────────────────────── */
-.cs-volatility-preview {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    font-style: italic;
-    padding: 0 14px 10px;
+.nar-toast__close:hover {
+    opacity: 1;
 }

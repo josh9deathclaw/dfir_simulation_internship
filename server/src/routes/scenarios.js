@@ -84,13 +84,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const {
         title, description, difficulty, estimated_time_minutes,
-        mode = 'open_ended',
-        class_ids  = [],
-        phases     = [],
-        injects    = [],
+        mode      = 'open_ended',
+        class_ids = [],
+        phases    = [],
+        injects   = [],
         objectives = [],
         questions  = [],
-        decisions  = [],
     } = req.body;
 
     if (!title?.trim())    return res.status(400).json({ message: 'Title is required' });
@@ -125,31 +124,39 @@ router.post('/', authenticateToken, async (req, res) => {
             );
         }
 
-        // Phases
+        // Phases — include time_budget (narrative) with sensible default for open-ended
         const phaseIdMap = {};
         for (const phase of phases) {
             const phaseRes = await client.query(
                 `INSERT INTO phases
                      (scenario_id, title, description, order_index,
-                      duration_minutes, unlock_time_minutes, requires_completion)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                      duration_minutes, unlock_time_minutes, requires_completion,
+                      time_budget)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  RETURNING id`,
-                [scenarioId, phase.title.trim(), phase.description || null,
-                 phase.order_index, phase.duration_minutes || 30,
-                 phase.order_index === 0 ? 0 : null,
-                 phase.requires_completion || false]
+                [
+                    scenarioId,
+                    phase.title.trim(),
+                    phase.description || null,
+                    phase.order_index,
+                    phase.duration_minutes || 30,
+                    phase.order_index === 0 ? 0 : null,
+                    phase.requires_completion || false,
+                    phase.time_budget != null ? parseInt(phase.time_budget) : 30,
+                ]
             );
             phaseIdMap[phase._id] = phaseRes.rows[0].id;
         }
 
-        const fileMoves = [];
+        const fileMoves   = [];
         const injectIdMap = {};
 
-        // Injects (with lifetime_minutes + volatility for narrative)
+        // Injects
         for (const inject of injects) {
             const guaranteedMinutes = inject.guaranteed_release_minutes !== ''
                 ? parseInt(inject.guaranteed_release_minutes) : null;
 
+            // Primary file
             let newFilePath = null;
             if (inject.file_path) {
                 const filename = path.basename(inject.file_path);
@@ -159,34 +166,67 @@ router.post('/', authenticateToken, async (req, res) => {
                 fileMoves.push({ oldPath, newPath });
             }
 
+            // Low-quality file (narrative)
+            let newFilePathLow = null;
+            if (inject.file_path_low_quality) {
+                const filename = path.basename(inject.file_path_low_quality);
+                const oldPath  = path.join(__dirname, '../../', inject.file_path_low_quality);
+                const newPath  = path.join(scenarioDir, filename);
+                newFilePathLow = `uploads/scenarios/${scenarioId}/${filename}`;
+                fileMoves.push({ oldPath, newPath });
+            }
+
             const realPhaseId = inject._phaseId ? (phaseIdMap[inject._phaseId] || null) : null;
 
-            await client.query(
+            const injectRes = await client.query(
                 `INSERT INTO injects
                      (scenario_id, phase_id, title, description, file_type, file_path,
                       release_type, min_delay_minutes, max_delay_minutes,
                       guaranteed_release_minutes, notify_student,
-                      lifetime_minutes, volatility)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+                      lifespan_units, volatility,
+                      extraction_cost_full, extraction_cost_live,
+                      file_path_low_quality)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
                  RETURNING id`,
                 [
                     scenarioId, realPhaseId,
                     inject.title.trim(), inject.description || null,
                     inject.file_type || null, newFilePath,
-                    inject.release_type,
+                    inject.release_type || 'random_in_phase',
                     inject.min_delay_minutes ?? 0,
                     inject.max_delay_minutes ?? 10,
                     guaranteedMinutes,
                     inject.notify_student !== false,
-                    inject.lifetime_minutes ? parseInt(inject.lifetime_minutes) : null,
+                    inject.lifespan_units ? parseInt(inject.lifespan_units) : null,
                     inject.volatility || 'none',
+                    inject.extraction_cost_full != null ? parseInt(inject.extraction_cost_full) : 5,
+                    inject.extraction_cost_live != null ? parseInt(inject.extraction_cost_live) : 2,
+                    newFilePathLow,
                 ]
             );
-            const realInjectId = res.rows[0].id;
 
-            // CRITICAL: map frontend ID → DB UUID
-            if (inject._id) {
-                injectIdMap[inject._id] = realInjectId;
+            const realInjectId = injectRes.rows[0].id;
+            if (inject._id) injectIdMap[inject._id] = realInjectId;
+        }
+
+        // inject_triggers — one per inject (narrative mode)
+        if (mode === 'narrative') {
+            for (const inject of injects) {
+                const realInjectId = inject._id ? injectIdMap[inject._id] : null;
+                if (!realInjectId) continue;
+
+                const triggerType      = inject.trigger_type || 'always';
+                const thresholdValue   = triggerType === 'time_elapsed'
+                    ? (parseInt(inject.trigger_threshold) || null) : null;
+                const refRealInjectId  = triggerType === 'evidence_extracted'
+                    ? (injectIdMap[inject.trigger_ref_inject_id] || null) : null;
+
+                await client.query(
+                    `INSERT INTO inject_triggers
+                         (inject_id, trigger_type, threshold_value, ref_inject_id)
+                     VALUES ($1, $2, $3, $4)`,
+                    [realInjectId, triggerType, thresholdValue, refRealInjectId]
+                );
             }
         }
 
@@ -228,54 +268,10 @@ router.post('/', authenticateToken, async (req, res) => {
             );
         }
 
-        // Decisions + options (narrative only, ignored for open-ended)
-        if (mode === 'narrative') {
-            for (let i = 0; i < decisions.length; i++) {
-                const d = decisions[i];
-                const realPhaseId = d._phaseId ? (phaseIdMap[d._phaseId] || null) : null;
-                const decRes = await client.query(
-                    `INSERT INTO decisions
-                         (scenario_id, phase_id, title, description,
-                          release_at_minutes, order_index)
-                     VALUES ($1, $2, $3, $4, $5, $6)
-                     RETURNING id`,
-                    [scenarioId, realPhaseId,
-                     d.title.trim(), d.description || null,
-                     d.release_at_minutes ?? 0, i]
-                );
-                const decisionId = decRes.rows[0].id;
-
-                for (let j = 0; j < (d.options || []).length; j++) {
-                    const opt = d.options[j];
-
-                    const realInjectId = opt.inject_id
-                        ? (injectIdMap[opt.inject_id] || null)
-                        : null;
-
-                    await client.query(
-                        `INSERT INTO decision_options
-                             (decision_id, label, description, outcome_text,
-                              score_delta, time_cost_minutes, inject_effect, inject_id)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                        [
-                            decisionId,
-                            opt.label.trim(),
-                            opt.description || null,
-                            opt.outcome_text || null,
-                            parseFloat(opt.score_delta) || 0,
-                            parseInt(opt.time_cost_minutes) || 0,
-                            opt.inject_effect || null,
-                            realInjectId,
-                        ]
-                    );
-                }
-            }
-        }
-
         await client.query('COMMIT');
 
         for (const move of fileMoves) {
-            await fs.promises.rename(move.oldPath, move.newPath);
+            try { await fs.promises.rename(move.oldPath, move.newPath); } catch (_) {}
         }
 
         res.status(201).json({ id: scenarioId, message: 'Scenario created successfully' });
@@ -315,8 +311,8 @@ router.patch('/:id/publish', authenticateToken, async (req, res) => {
 
 // ── GET /:id/full — used by editor + simulator ────────────────────────────────
 router.get('/:id/full', authenticateToken, async (req, res) => {
-    const { id: scenarioId }    = req.params;
-    const { id: userId, role }  = req.user;
+    const { id: scenarioId }   = req.params;
+    const { id: userId, role } = req.user;
 
     try {
         const scenarioRes = await db.query(
@@ -343,19 +339,33 @@ router.get('/:id/full', authenticateToken, async (req, res) => {
             if (scenario.created_by !== userId) return res.status(403).json({ message: 'Forbidden' });
         }
 
+        // Phases — include time_budget
         const phasesRes = await db.query(
             `SELECT id, title, description, order_index,
-                    duration_minutes, requires_completion
+                    duration_minutes, requires_completion, time_budget
              FROM phases WHERE scenario_id = $1 ORDER BY order_index ASC`,
             [scenarioId]
         );
 
+        // Injects — include all narrative columns
         const injectsRes = await db.query(
             `SELECT id, phase_id, title, description, file_path, file_type,
                     release_type, min_delay_minutes, max_delay_minutes,
                     guaranteed_release_minutes, notify_student,
-                    lifetime_minutes, volatility
+                    lifespan_units, volatility,
+                    extraction_cost_full, extraction_cost_live,
+                    file_path_low_quality
              FROM injects WHERE scenario_id = $1`,
+            [scenarioId]
+        );
+
+        // inject_triggers — joined to injects, returned as a flat array
+        // keyed by inject_id so the frontend mapper can attach them
+        const triggersRes = await db.query(
+            `SELECT t.id, t.inject_id, t.trigger_type, t.threshold_value, t.ref_inject_id
+             FROM inject_triggers t
+             JOIN injects i ON i.id = t.inject_id
+             WHERE i.scenario_id = $1`,
             [scenarioId]
         );
 
@@ -373,37 +383,13 @@ router.get('/:id/full', authenticateToken, async (req, res) => {
             [scenarioId]
         );
 
-        // Decisions + options (only meaningful for narrative, but always fetched for editor)
-        const decisionsRes = await db.query(
-            `SELECT d.id, d.phase_id, d.title, d.description,
-                    d.release_at_minutes, d.order_index
-             FROM decisions d
-             WHERE d.scenario_id = $1
-             ORDER BY d.order_index ASC`,
-            [scenarioId]
-        );
-
-        // Attach options to each decision
-        const decisions = [];
-        for (const d of decisionsRes.rows) {
-            const optsRes = await db.query(
-                `SELECT id, label, description, outcome_text,
-                        score_delta, time_cost_minutes, inject_effect, inject_id
-                 FROM decision_options
-                 WHERE decision_id = $1
-                 ORDER BY id ASC`,
-                [d.id]
-            );
-            decisions.push({ ...d, options: optsRes.rows });
-        }
-
         res.json({
             scenario,
             phases:     phasesRes.rows,
             injects:    injectsRes.rows,
+            triggers:   triggersRes.rows,
             objectives: objectivesRes.rows,
             questions:  questionsRes.rows,
-            decisions,
         });
 
     } catch (err) {
@@ -447,7 +433,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
         injects    = [],
         objectives = [],
         questions  = [],
-        decisions  = [],
     } = req.body;
 
     if (!title?.trim())    return res.status(400).json({ message: 'Title is required' });
@@ -472,8 +457,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         }
 
         const scenarioId = req.params.id;
-        // Mode is immutable after creation — read from DB, don't trust payload
-        const mode = scenarioRes.rows[0].mode;
+        const mode = scenarioRes.rows[0].mode; // immutable — always read from DB
 
         await client.query(
             `UPDATE scenarios
@@ -493,8 +477,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
             );
         }
 
-        // Delete all child records (cascade handles decision_options via FK)
-        await client.query('DELETE FROM decisions WHERE scenario_id = $1', [scenarioId]);
+        // Delete child records — inject_triggers cascade from injects FK
         await client.query('DELETE FROM questions WHERE scenario_id = $1', [scenarioId]);
         await client.query('DELETE FROM injects WHERE scenario_id = $1', [scenarioId]);
         await client.query('DELETE FROM objectives WHERE scenario_id = $1', [scenarioId]);
@@ -506,58 +489,116 @@ router.put('/:id', authenticateToken, async (req, res) => {
             const phaseRes = await client.query(
                 `INSERT INTO phases
                      (scenario_id, title, description, order_index,
-                      duration_minutes, unlock_time_minutes, requires_completion)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                      duration_minutes, unlock_time_minutes, requires_completion,
+                      time_budget)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  RETURNING id`,
-                [scenarioId, phase.title.trim(), phase.description || null,
-                 phase.order_index, phase.duration_minutes || 30,
-                 phase.order_index === 0 ? 0 : null,
-                 phase.requires_completion || false]
+                [
+                    scenarioId,
+                    phase.title.trim(),
+                    phase.description || null,
+                    phase.order_index,
+                    phase.duration_minutes || 30,
+                    phase.order_index === 0 ? 0 : null,
+                    phase.requires_completion || false,
+                    phase.time_budget != null ? parseInt(phase.time_budget) : 30,
+                ]
             );
             phaseIdMap[phase._id] = phaseRes.rows[0].id;
         }
 
         const scenarioDir = path.join(__dirname, '../../uploads/scenarios', String(scenarioId));
         await fs.promises.mkdir(scenarioDir, { recursive: true });
-        const fileMoves = [];
+        const fileMoves   = [];
+        const injectIdMap = {};
 
         // Re-insert injects
         for (const inject of injects) {
             const guaranteedMinutes = inject.guaranteed_release_minutes !== ''
                 ? parseInt(inject.guaranteed_release_minutes) : null;
 
+            // Primary file
             let newFilePath = null;
             if (inject.file_path) {
                 const filename = path.basename(inject.file_path);
                 const oldPath  = path.join(__dirname, '../../', inject.file_path);
                 const newPath  = path.join(scenarioDir, filename);
                 newFilePath    = `uploads/scenarios/${scenarioId}/${filename}`;
-                fileMoves.push({ oldPath, newPath });
+                // Only queue a move when the path is a temp upload path (not already in scenarioDir)
+                if (!inject.file_path.startsWith(`uploads/scenarios/${scenarioId}/`)) {
+                    fileMoves.push({ oldPath, newPath });
+                } else {
+                    newFilePath = inject.file_path; // already in place
+                }
+            }
+
+            // Low-quality file (narrative)
+            let newFilePathLow = null;
+            if (inject.file_path_low_quality) {
+                const filename = path.basename(inject.file_path_low_quality);
+                const oldPath  = path.join(__dirname, '../../', inject.file_path_low_quality);
+                const newPath  = path.join(scenarioDir, filename);
+                if (!inject.file_path_low_quality.startsWith(`uploads/scenarios/${scenarioId}/`)) {
+                    newFilePathLow = `uploads/scenarios/${scenarioId}/${filename}`;
+                    fileMoves.push({ oldPath, newPath });
+                } else {
+                    newFilePathLow = inject.file_path_low_quality;
+                }
             }
 
             const realPhaseId = inject._phaseId ? (phaseIdMap[inject._phaseId] || null) : null;
-            await client.query(
+
+            const injectRes = await client.query(
                 `INSERT INTO injects
                      (scenario_id, phase_id, title, description, file_type, file_path,
                       release_type, min_delay_minutes, max_delay_minutes,
                       guaranteed_release_minutes, notify_student,
-                      lifetime_minutes, volatility)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+                      lifespan_units, volatility,
+                      extraction_cost_full, extraction_cost_live,
+                      file_path_low_quality)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+                 RETURNING id`,
                 [
                     scenarioId, realPhaseId,
                     inject.title.trim(), inject.description || null,
                     inject.file_type || null, newFilePath,
-                    inject.release_type,
+                    inject.release_type || 'random_in_phase',
                     inject.min_delay_minutes ?? 0,
                     inject.max_delay_minutes ?? 10,
                     guaranteedMinutes,
                     inject.notify_student !== false,
-                    inject.lifetime_minutes ? parseInt(inject.lifetime_minutes) : null,
+                    inject.lifespan_units ? parseInt(inject.lifespan_units) : null,
                     inject.volatility || 'none',
+                    inject.extraction_cost_full != null ? parseInt(inject.extraction_cost_full) : 5,
+                    inject.extraction_cost_live != null ? parseInt(inject.extraction_cost_live) : 2,
+                    newFilePathLow,
                 ]
             );
+
             const realInjectId = injectRes.rows[0].id;
-            injectIdMap[inject._id] = realInjectId;
+            if (inject._id) injectIdMap[inject._id] = realInjectId;
+        }
+
+        // Re-insert inject_triggers (narrative only)
+        // Triggers cascade-deleted with injects above, so just re-insert
+        if (mode === 'narrative') {
+            for (const inject of injects) {
+                const realInjectId = inject._id ? injectIdMap[inject._id] : null;
+                if (!realInjectId) continue;
+
+                const triggerType     = inject.trigger_type || 'always';
+                const thresholdValue  = triggerType === 'time_elapsed'
+                    ? (parseInt(inject.trigger_threshold) || null) : null;
+                const refRealInjectId = triggerType === 'evidence_extracted'
+                    ? (injectIdMap[inject.trigger_ref_inject_id] || null) : null;
+
+                await client.query(
+                    `INSERT INTO inject_triggers
+                         (inject_id, trigger_type, threshold_value, ref_inject_id)
+                     VALUES ($1, $2, $3, $4)`,
+                    [realInjectId, triggerType, thresholdValue, refRealInjectId]
+                );
+            }
         }
 
         // Re-insert objectives
@@ -596,45 +637,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
                  q.blocks_progression || false,
                  parseFloat(q.max_score) || 10, i]
             );
-        }
-
-        // Re-insert decisions (narrative only)
-        if (mode === 'narrative') {
-            for (let i = 0; i < decisions.length; i++) {
-                const d = decisions[i];
-                const realPhaseId = d._phaseId ? (phaseIdMap[d._phaseId] || null) : null;
-                const decRes = await client.query(
-                    `INSERT INTO decisions
-                         (scenario_id, phase_id, title, description,
-                          release_at_minutes, order_index)
-                     VALUES ($1, $2, $3, $4, $5, $6)
-                     RETURNING id`,
-                    [scenarioId, realPhaseId,
-                     d.title.trim(), d.description || null,
-                     d.release_at_minutes ?? 0, i]
-                );
-                const decisionId = decRes.rows[0].id;
-
-                for (let j = 0; j < (d.options || []).length; j++) {
-                    const opt = d.options[j];
-                    await client.query(
-                        `INSERT INTO decision_options
-                             (decision_id, label, description, outcome_text,
-                              score_delta, time_cost_minutes, inject_effect, inject_id)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                        [
-                            decisionId,
-                            opt.label.trim(),
-                            opt.description || null,
-                            opt.outcome_text || null,
-                            parseFloat(opt.score_delta) || 0,
-                            parseInt(opt.time_cost_minutes) || 0,
-                            opt.inject_effect || null,
-                            opt.inject_id || null,
-                        ]
-                    );
-                }
-            }
         }
 
         await client.query('COMMIT');

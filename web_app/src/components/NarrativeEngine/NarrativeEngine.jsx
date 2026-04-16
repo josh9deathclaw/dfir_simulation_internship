@@ -1,558 +1,452 @@
 // src/components/NarrativeEngine/NarrativeEngine.jsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Drop-in overlay for SimulatorPage when scenario.mode === 'narrative'.
+// Student-facing runtime for narrative mode scenarios.
 //
-// Key design rules:
-//   1. handleChoose receives the full decision as a parameter — no stale
-//      closure on pendingDecision.
-//   2. Decisions are only marked "shown" after they PASS their conditions check,
-//      not simply because their release time was reached. This allows a decision
-//      to stay eligible until state makes its conditions true.
-//   3. state_effect unlock/lock targets support "$variableName" references —
-//      the engine resolves these against attemptState at the moment of choice,
-//      so teachers can express "unlock whichever inject wasn't chosen" without
-//      duplicating decisions.
-//   4. All backend calls are fire-and-forget — a network failure logs a warning
-//      but never freezes the UI.
+// Layout (replaces the open-ended feed + objectives columns):
+//
+//   ┌─────────────────────────────────────────────────────┐
+//   │  TOKEN BAR  — scenario-time units left this phase   │
+//   ├──────────────────────┬──────────────────────────────┤
+//   │  UNDISCOVERED        │  EXTRACTED                   │
+//   │  (hidden — count     │  evidence cards (read-only,  │
+//   │   only shown)        │  view in VM note)            │
+//   │                      │                              │
+//   │  DISCOVERED          │                              │
+//   │  evidence cards with │                              │
+//   │  quality indicator + │                              │
+//   │  [Proper] [Live]     │                              │
+//   │  action buttons      │                              │
+//   └──────────────────────┴──────────────────────────────┘
+//
+// Props:
+//   phaseInjects   [{...injectRow, trigger from DB}]  — all injects for this phase
+//   triggers       [{inject_id, trigger_type, threshold_value, ref_inject_id}]
+//   timeBudget     number  — phase.time_budget (max scenario-time units)
+//   attemptId      string
+//   token          string
+//   onScenarioTimeChange(n)  — bubbles up to SimulatorPage for BottomBar display
 // ─────────────────────────────────────────────────────────────────────────────
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { API } from "../../utils/api";
-import { getEvidenceStatus } from "../CreateScenario/CreateEditScenarioLogic";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./NarrativeEngine.css";
+import { API } from "../../utils/api";
 
-const STATUS_COLORS = {
-    stable:   { bar: "#52b788", label: "STABLE",   text: "#52b788" },
-    at_risk:  { bar: "#f4a261", label: "AT RISK",  text: "#f4a261" },
-    critical: { bar: "#e63946", label: "CRITICAL", text: "#e63946" },
-    lost:     { bar: "#444",    label: "LOST",      text: "#666"   },
-};
-
-// ─── Pure helpers (no React) ───────────────────────────────────────────────────
-
-// Returns true if all key-value pairs in conditions are satisfied by attemptState.
-// Empty / null conditions → always true.
-function conditionsMatch(conditions, attemptState) {
-    if (!conditions || Object.keys(conditions).length === 0) return true;
-    return Object.entries(conditions).every(([k, v]) => attemptState[k] === v);
+// ─── Quality helpers ──────────────────────────────────────────────────────────
+function computeThresholds(lifespanUnits, volatility) {
+    if (!lifespanUnits || volatility === "none") return { degradeAt: null, destroyAt: null };
+    const mult = volatility === "high" ? 0.25 : 0.5;
+    return {
+        degradeAt: Math.round(lifespanUnits * mult),
+        destroyAt: lifespanUnits,
+    };
 }
 
-// Resolve a single inject-ID entry that may be a literal UUID or a $variable
-// reference. Returns the resolved inject ID string, or null if unresolvable.
-function resolveInjectRef(ref, attemptState) {
-    if (!ref) return null;
-    if (typeof ref === "string" && ref.startsWith("$")) {
-        const varName = ref.slice(1);
-        return attemptState[varName] ?? null;
-    }
-    return ref;
+function computeQuality(inject, scenarioTime, discoveredAt) {
+    const { lifespan_units, volatility } = inject;
+    if (!lifespan_units || volatility === "none") return "high";
+    const elapsed = scenarioTime - (discoveredAt ?? 0);
+    const { degradeAt, destroyAt } = computeThresholds(lifespan_units, volatility);
+    if (elapsed >= destroyAt) return "destroyed";
+    if (elapsed >= degradeAt) return "low";
+    return "high";
 }
 
-// Apply a state_effect to the current attemptState and return the pieces
-// needed to mutate UI state.
-//   nextState  — new attempt state object (merged copy, or same ref if no sets)
-//   toUnlock   — resolved inject IDs to add to discovered list
-//   toLock     — resolved inject IDs to remove from discovered list
-function applyStateEffect(effect, attemptState) {
-    if (!effect) return { nextState: attemptState, toUnlock: [], toLock: [] };
-
-    const nextState = effect.set && Object.keys(effect.set).length > 0
-        ? { ...attemptState, ...effect.set }
-        : attemptState;
-
-    const toUnlock = (Array.isArray(effect.unlock) ? effect.unlock : [])
-        .map(ref => resolveInjectRef(ref, nextState))  // resolve after applying set
-        .filter(Boolean);
-
-    const toLock = (Array.isArray(effect.lock) ? effect.lock : [])
-        .map(ref => resolveInjectRef(ref, nextState))
-        .filter(Boolean);
-
-    return { nextState, toUnlock, toLock };
-}
-
-// ─── Volatility bar ────────────────────────────────────────────────────────────
-function VolatilityBar({ inject, scenarioTime }) {
-    const { status, qualityLabel } = getEvidenceStatus(inject, scenarioTime);
-    const colors = STATUS_COLORS[status];
-
-    let fillPct = 100;
-    if (inject.lifetime_minutes && inject.volatility !== "none") {
-        fillPct = Math.max(0, Math.min(100,
-            100 * (1 - scenarioTime / inject.lifetime_minutes)
-        ));
-    }
-
-    const degradeThresholdPct = inject.volatility === "high" ? 25
-        : inject.volatility === "average" ? 50
-        : null;
+// ─── Token Bar ────────────────────────────────────────────────────────────────
+function TokenBar({ scenarioTime, timeBudget }) {
+    const used    = scenarioTime;
+    const left    = Math.max(0, timeBudget - used);
+    const pct     = Math.min(100, (used / timeBudget) * 100);
+    const critical = pct >= 80;
+    const exhausted = left === 0;
 
     return (
-        <div className="ne-vol-bar-wrap">
-            <div className="ne-vol-bar-track">
-                <div
-                    className={`ne-vol-bar-fill ne-vol-bar-fill--${status}`}
-                    style={{ width: `${fillPct}%`, background: colors.bar }}
-                />
-                {degradeThresholdPct !== null && (
-                    <div className="ne-vol-marker"
-                        style={{ left: `${100 - degradeThresholdPct}%` }}
-                        title="Quality degrades here" />
-                )}
+        <div className={`nar-token-bar${critical ? " nar-token-bar--critical" : ""}${exhausted ? " nar-token-bar--exhausted" : ""}`}>
+            <div className="nar-token-bar__label">
+                <span className="nar-token-bar__slash">// </span>
+                SCENARIO TIME
             </div>
-            <div className="ne-vol-bar-labels">
-                <span className="ne-vol-status" style={{ color: colors.text }}>{colors.label}</span>
-                {status !== "lost" && <span className="ne-vol-quality">{qualityLabel} quality</span>}
+            <div className="nar-token-bar__track">
+                <div className="nar-token-bar__fill" style={{ width: `${pct}%` }} />
             </div>
-        </div>
-    );
-}
-
-// ─── Discovered evidence card ──────────────────────────────────────────────────
-function DiscoveredCard({ inject, scenarioTime, onExtract, extracting }) {
-    const { status } = getEvidenceStatus(inject, scenarioTime);
-    const isLost = status === "lost";
-    return (
-        <div className={`ne-evidence-card ne-evidence-card--discovered ne-evidence-card--${status}`}>
-            <div className="ne-evidence-card__header">
-                <span className="ne-evidence-card__name">{inject.title}</span>
-                {isLost
-                    ? <span className="ne-evidence-card__badge ne-evidence-card__badge--lost">LOST</span>
-                    : <button className="ne-extract-btn"
-                        disabled={extracting}
-                        onClick={() => onExtract(inject)}>
-                        {extracting ? "EXTRACTING…" : "EXTRACT →"}
-                      </button>
-                }
-            </div>
-            {inject.description && <p className="ne-evidence-card__desc">{inject.description}</p>}
-            {inject.volatility !== "none"
-                ? <VolatilityBar inject={inject} scenarioTime={scenarioTime} />
-                : <span className="ne-evidence-card__stable">◆ Stable — no degradation</span>
-            }
-        </div>
-    );
-}
-
-// ─── Extracted evidence card ───────────────────────────────────────────────────
-function ExtractedCard({ inject, qualityAtExtraction }) {
-    const color = qualityAtExtraction === "Low" ? "#f4a261" : "#52b788";
-    return (
-        <div className="ne-evidence-card ne-evidence-card--extracted">
-            <div className="ne-evidence-card__header">
-                <span className="ne-evidence-card__name">{inject.title}</span>
-                <span className="ne-evidence-card__badge" style={{ color, borderColor: color }}>
-                    {qualityAtExtraction} quality
+            <div className="nar-token-bar__counts">
+                <span className={`nar-token-bar__used${critical ? " nar-token-bar__used--critical" : ""}`}>
+                    {used}u used
+                </span>
+                <span className={`nar-token-bar__left${exhausted ? " nar-token-bar__left--zero" : ""}`}>
+                    {exhausted ? "BUDGET EXHAUSTED" : `${left}u remaining`}
                 </span>
             </div>
-            {inject.description && <p className="ne-evidence-card__desc">{inject.description}</p>}
-            <span className="ne-evidence-card__frozen">◆ Extracted — quality frozen</span>
         </div>
     );
 }
 
-// ─── Decision modal ────────────────────────────────────────────────────────────
-const DECISION_TIMEOUT = 30;
+// ─── Quality badge ─────────────────────────────────────────────────────────────
+function QualityBadge({ quality }) {
+    const cfg = {
+        high:      { label: "HIGH QUALITY",  cls: "nar-badge--high" },
+        low:       { label: "LOW QUALITY",   cls: "nar-badge--low" },
+        destroyed: { label: "DESTROYED",     cls: "nar-badge--destroyed" },
+    }[quality] || { label: "UNKNOWN", cls: "" };
 
-// onChoose receives (option, decision) — both passed explicitly so the parent
-// callback never needs to close over pendingDecision.
-function DecisionModal({ decision, onChoose, choosing }) {
-    const [timeLeft, setTimeLeft] = useState(DECISION_TIMEOUT);
-    const [selectedId, setSelectedId] = useState(null);
+    return <span className={`nar-badge ${cfg.cls}`}>{cfg.label}</span>;
+}
 
-    // Auto-choose first option on timeout
-    useEffect(() => {
-        if (timeLeft <= 0) {
-            onChoose(decision.options[0], decision);
-            return;
+// ─── Discovered evidence card ─────────────────────────────────────────────────
+function DiscoveredCard({ inject, discoveredAt, scenarioTime, timeBudget, onExtract, extracting }) {
+    const quality     = computeQuality(inject, scenarioTime, discoveredAt);
+    const isDestroyed = quality === "destroyed";
+    const budgetGone  = scenarioTime >= timeBudget;
+
+    const fullCost = inject.extraction_cost_full ?? 5;
+    const liveCost = inject.extraction_cost_live ?? 2;
+
+    const canFull = !isDestroyed && !budgetGone && (scenarioTime + fullCost <= timeBudget);
+    const canLive = !isDestroyed && !budgetGone && (scenarioTime + liveCost <= timeBudget);
+
+    const displayName = inject.file_name || inject.file_path?.split("/").pop() || null;
+
+    // Countdown hint
+    let countdownHint = null;
+    if (!isDestroyed && inject.volatility !== "none" && inject.lifespan_units) {
+        const { degradeAt, destroyAt } = computeThresholds(inject.lifespan_units, inject.volatility);
+        const elapsed = scenarioTime - discoveredAt;
+        if (quality === "high" && degradeAt != null) {
+            const remaining = degradeAt - elapsed;
+            countdownHint = remaining > 0
+                ? `Degrades in ${remaining}u`
+                : "Degrading now";
+        } else if (quality === "low") {
+            const remaining = destroyAt - elapsed;
+            countdownHint = remaining > 0
+                ? `Destroyed in ${remaining}u`
+                : "Destroying now";
         }
-        const t = setTimeout(() => setTimeLeft(s => s - 1), 1000);
-        return () => clearTimeout(t);
-    }, [timeLeft, decision, onChoose]);
-
-    const urgency = timeLeft <= 10 ? "critical" : timeLeft <= 20 ? "warning" : "normal";
-    const pct = (timeLeft / DECISION_TIMEOUT) * 100;
+    }
 
     return (
-        <div className="ne-decision-backdrop">
-            <div className="ne-decision-modal">
-                <div className="ne-decision-timer-track">
-                    <div
-                        className={`ne-decision-timer-fill ne-decision-timer-fill--${urgency}`}
-                        style={{ width: `${pct}%` }}
-                    />
+        <div className={`nar-card nar-card--discovered${isDestroyed ? " nar-card--destroyed" : ""}`}>
+            <div className="nar-card__scanline" />
+            <div className="nar-card__header">
+                <span className="nar-card__prompt">&gt;&gt;</span>
+                <span className="nar-card__title">{inject.title}</span>
+                <QualityBadge quality={quality} />
+            </div>
+
+            {inject.description && (
+                <div className="nar-card__desc">{inject.description}</div>
+            )}
+
+            {displayName && (
+                <div className="nar-card__file">
+                    <span className="nar-card__file-name">{displayName}</span>
                 </div>
-                <div className="ne-decision-header">
-                    <span className="ne-decision-label">// DECISION REQUIRED</span>
-                    <span className={`ne-decision-countdown ne-decision-countdown--${urgency}`}>
-                        {timeLeft}s
-                    </span>
+            )}
+
+            {countdownHint && !isDestroyed && (
+                <div className={`nar-card__countdown${quality === "low" ? " nar-card__countdown--urgent" : ""}`}>
+                    ⏱ {countdownHint}
                 </div>
-                <h2 className="ne-decision-title">{decision.title}</h2>
-                {decision.description && (
-                    <p className="ne-decision-desc">{decision.description}</p>
-                )}
-                <div className="ne-decision-options">
-                    {decision.options.map((opt) => {
-                        const optId = opt.id || opt._id;
-                        return (
-                            <button
-                                key={optId}
-                                className={`ne-decision-option${selectedId === optId ? " ne-decision-option--selected" : ""}`}
-                                disabled={choosing}
-                                onClick={() => {
-                                    setSelectedId(optId);
-                                    onChoose(opt, decision);
-                                }}
-                            >
-                                <div className="ne-decision-option__label">{opt.label}</div>
-                                <div className="ne-decision-option__meta">
-                                    <span className="ne-decision-option__time">
-                                        ⏱ +{opt.time_cost_minutes} min scenario time
-                                    </span>
-                                </div>
-                            </button>
-                        );
-                    })}
+            )}
+
+            {isDestroyed ? (
+                <div className="nar-card__destroyed-msg">
+                    EVIDENCE DESTROYED — unrecoverable
                 </div>
+            ) : budgetGone ? (
+                <div className="nar-card__budget-msg">
+                    BUDGET EXHAUSTED — no actions available
+                </div>
+            ) : (
+                <div className="nar-card__actions">
+                    <button
+                        className={`nar-action-btn nar-action-btn--full${canFull ? " nar-action-btn--ready" : " nar-action-btn--disabled"}`}
+                        disabled={!canFull || extracting}
+                        onClick={() => onExtract(inject, "full")}
+                        title={`Proper acquisition — costs ${fullCost}u, extracts at current quality`}
+                    >
+                        <span className="nar-action-btn__label">[ PROPER ACQUISITION ]</span>
+                        <span className="nar-action-btn__cost">{fullCost}u</span>
+                    </button>
+                    <button
+                        className={`nar-action-btn nar-action-btn--live${canLive ? " nar-action-btn--ready" : " nar-action-btn--disabled"}`}
+                        disabled={!canLive || extracting}
+                        onClick={() => onExtract(inject, "live")}
+                        title={`Live acquisition — costs ${liveCost}u, always low quality`}
+                    >
+                        <span className="nar-action-btn__label">[ LIVE ACQUISITION ]</span>
+                        <span className="nar-action-btn__cost">{liveCost}u · always low</span>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Extracted evidence card ──────────────────────────────────────────────────
+function ExtractedCard({ inject, qualityAtExtraction, extractionMethod }) {
+    const qualityLabel = qualityAtExtraction === "high" ? "HIGH" : "LOW";
+    const methodLabel  = extractionMethod === "full" ? "PROPER" : "LIVE";
+    const displayName  = inject.file_name || inject.file_path?.split("/").pop() || null;
+
+    return (
+        <div className="nar-card nar-card--extracted">
+            <div className="nar-card__header">
+                <span className="nar-card__prompt">✓</span>
+                <span className="nar-card__title">{inject.title}</span>
+                <span className={`nar-badge nar-badge--extracted nar-badge--${qualityAtExtraction}`}>
+                    {qualityLabel} · {methodLabel}
+                </span>
+            </div>
+            {inject.description && (
+                <div className="nar-card__desc">{inject.description}</div>
+            )}
+            {displayName && (
+                <div className="nar-card__file">
+                    <span className="nar-card__file-name">{displayName}</span>
+                </div>
+            )}
+            <div className="nar-card__vm-note">
+                View evidence in the Forensic Workstation
             </div>
         </div>
     );
 }
 
-// ─── Feedback card ─────────────────────────────────────────────────────────────
-function FeedbackCard({ feedback, onDismiss }) {
+// ─── Toast notification ───────────────────────────────────────────────────────
+function Toast({ messages, onDismiss }) {
     return (
-        <div className="ne-feedback-backdrop" onClick={onDismiss}>
-            <div className="ne-feedback-card" onClick={e => e.stopPropagation()}>
-                <div className="ne-feedback-header">
-                    <span className="ne-feedback-label">// DECISION OUTCOME</span>
+        <div className="nar-toast-stack">
+            {messages.map((m) => (
+                <div key={m.id} className={`nar-toast nar-toast--${m.type}`}>
+                    <span>{m.text}</span>
+                    <button className="nar-toast__close" onClick={() => onDismiss(m.id)}>✕</button>
                 </div>
-                {feedback.outcomeText && (
-                    <p className="ne-feedback-outcome">{feedback.outcomeText}</p>
-                )}
-                {feedback.unlocked.length > 0 && (
-                    <div className="ne-feedback-section ne-feedback-section--ok">
-                        <div className="ne-feedback-section-title">▶ Evidence discovered</div>
-                        {feedback.unlocked.map(inj => (
-                            <div key={inj.id || inj._id} className="ne-feedback-item">
-                                <span>{inj.title}</span>
-                                <span className="ne-feedback-item__status">→ Available</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {feedback.degraded.length > 0 && (
-                    <div className="ne-feedback-section ne-feedback-section--warn">
-                        <div className="ne-feedback-section-title">⚠ Evidence degraded</div>
-                        {feedback.degraded.map(inj => (
-                            <div key={inj.id || inj._id} className="ne-feedback-item">
-                                <span>{inj.title}</span>
-                                <span className="ne-feedback-item__status">→ Low quality</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {feedback.lost.length > 0 && (
-                    <div className="ne-feedback-section ne-feedback-section--danger">
-                        <div className="ne-feedback-section-title">✕ Evidence lost</div>
-                        {feedback.lost.map(inj => (
-                            <div key={inj.id || inj._id} className="ne-feedback-item">
-                                <span>{inj.title}</span>
-                                <span className="ne-feedback-item__status">→ Unrecoverable</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {feedback.unlocked.length === 0 && feedback.degraded.length === 0 && feedback.lost.length === 0 && (
-                    <div className="ne-feedback-section ne-feedback-section--ok">
-                        <div className="ne-feedback-section-title">✓ No evidence affected</div>
-                    </div>
-                )}
-                <button className="ne-feedback-dismiss" onClick={onDismiss}>[ CONTINUE ]</button>
-            </div>
+            ))}
         </div>
     );
 }
 
-// ─── Main NarrativeEngine ──────────────────────────────────────────────────────
+// ─── Main NarrativeEngine ─────────────────────────────────────────────────────
 export default function NarrativeEngine({
-    allInjects,
-    decisions,
+    phaseInjects,
+    triggers,
+    timeBudget,
     attemptId,
     token,
-    onInjectReleased,
     onScenarioTimeChange,
 }) {
-    const [scenarioTime,      setScenarioTime]      = useState(0);
-    const [discoveredInjects, setDiscoveredInjects] = useState([]);
-    const [extractedInjects,  setExtractedInjects]  = useState([]);
-    const [decisionQueue,     setDecisionQueue]     = useState([]);  // ordered queue of pending decisions
-    const [choosing,          setChoosing]          = useState(false);
-    const [feedback,          setFeedback]          = useState(null);
-    const [extracting,        setExtracting]        = useState(null);
+    // scenarioTime is the current scenario-time units for this phase
+    const [scenarioTime, setScenarioTime] = useState(0);
 
-    // Key-value state store for this attempt.
-    // We keep a ref in sync with state so callbacks always read the latest value
-    // without needing to be in useCallback dependency arrays.
-    const [attemptState, setAttemptState] = useState({});
-    const attemptStateRef = useRef({});
+    // injectStates: map of inject_id → { status, discoveredAt, qualityAtExtraction, extractionMethod }
+    const [injectStates, setInjectStates] = useState({});
 
-    // Track which decisions have already been shown.
-    // A decision is added here ONLY after passing its conditions check and being
-    // queued — not simply because its release time was reached.
-    const shownDecisionsRef = useRef(new Set());
+    const [extracting,  setExtracting]  = useState(false); // global lock during API call
+    const [toasts,      setToasts]      = useState([]);
+    const toastIdRef = useRef(0);
 
-    // Keep refs in sync so timers and callbacks always read fresh values
-    const scenarioTimeRef      = useRef(0);
-    const discoveredInjectsRef = useRef([]);
+    // ── Build trigger lookup ──────────────────────────────────────────────────
+    const triggerMap = {};
+    (triggers || []).forEach((t) => { triggerMap[t.inject_id] = t; });
 
-    useEffect(() => { scenarioTimeRef.current = scenarioTime; }, [scenarioTime]);
-    useEffect(() => { discoveredInjectsRef.current = discoveredInjects; }, [discoveredInjects]);
-    useEffect(() => { attemptStateRef.current = attemptState; }, [attemptState]);
-
-    // ── Load persisted attempt state on mount ────────────────────────────────
+    // ── Initialise inject states on mount / phase change ─────────────────────
     useEffect(() => {
-        if (!attemptId || !token) return;
-        fetch(API(`/attempts/${attemptId}/state`), {
-            headers: { Authorization: `Bearer ${token}` },
-        })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-                if (data?.state && Object.keys(data.state).length > 0) {
-                    setAttemptState(data.state);
-                    attemptStateRef.current = data.state;
+        setScenarioTime(0);
+        onScenarioTimeChange?.(0);
+
+        const initial = {};
+        phaseInjects.forEach((inj) => {
+            const trigger = triggerMap[inj.id];
+            const isAlways = !trigger || trigger.trigger_type === "always";
+            initial[inj.id] = {
+                status:              isAlways ? "discovered" : "undiscovered",
+                discoveredAt:        isAlways ? 0 : null,
+                qualityAtExtraction: null,
+                extractionMethod:    null,
+            };
+        });
+        setInjectStates(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [phaseInjects]);
+
+    // ── Add toast ─────────────────────────────────────────────────────────────
+    const addToast = useCallback((text, type = "info") => {
+        const id = ++toastIdRef.current;
+        setToasts((prev) => [...prev, { id, text, type }]);
+        setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+    }, []);
+
+    const dismissToast = useCallback((id) => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, []);
+
+    // ── Extract action ────────────────────────────────────────────────────────
+    const handleExtract = useCallback(async (inject, action) => {
+        if (extracting || !attemptId) return;
+        setExtracting(true);
+
+        try {
+            const res = await fetch(
+                API(`/attempts/${attemptId}/injects/${inject.id}/extract`),
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        action,
+                        scenario_time_current: scenarioTime,
+                    }),
                 }
-            })
-            .catch(() => {/* non-fatal — start with empty state */});
-    }, [attemptId, token]);
-
-    // ── Bubble scenario time up to SimulatorPage for BottomBar ──────────────
-    useEffect(() => {
-        onScenarioTimeChange?.(scenarioTime);
-    }, [scenarioTime, onScenarioTimeChange]);
-
-    // ── Decision eligibility check ───────────────────────────────────────────
-    // Runs whenever scenarioTime or attemptState changes.
-    // A decision is queued when:
-    //   1. Its release_at_minutes <= current scenarioTime
-    //   2. Its conditions all match current attemptState
-    //   3. It has not already been shown
-    // The queue is ordered so decisions fire one at a time in release order.
-    useEffect(() => {
-        if (!decisions?.length) return;
-
-        const toQueue = [];
-        decisions.forEach(d => {
-            const id = d.id || d._id;
-            if (shownDecisionsRef.current.has(id)) return;
-            if (scenarioTime < (d.release_at_minutes ?? 0)) return;
-            if (!conditionsMatch(d.conditions, attemptState)) return;
-
-            // Mark shown now — conditions are met and we're queuing it
-            shownDecisionsRef.current.add(id);
-            toQueue.push(d);
-        });
-
-        if (toQueue.length > 0) {
-            // Sort by release_at_minutes so earlier decisions queue first
-            toQueue.sort((a, b) => (a.release_at_minutes ?? 0) - (b.release_at_minutes ?? 0));
-            setDecisionQueue(prev => [...prev, ...toQueue]);
-        }
-    }, [scenarioTime, attemptState, decisions]);
-
-    // ── Persist state variables to backend (fire-and-forget) ─────────────────
-    const persistAttemptState = useCallback((updates) => {
-        if (!updates || Object.keys(updates).length === 0) return;
-        fetch(API(`/attempts/${attemptId}/state`), {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ updates }),
-        }).catch(err => console.warn("[NarrativeEngine] Failed to persist state:", err));
-    }, [attemptId, token]);
-
-    // ── Handle a decision choice ─────────────────────────────────────────────
-    // Receives (option, decision) explicitly — no stale closure on decisionQueue.
-    const handleChoose = useCallback((option, decision) => {
-        setChoosing(true);
-
-        // Read latest values from refs to avoid stale closure issues
-        const currentTime     = scenarioTimeRef.current;
-        const currentState    = attemptStateRef.current;
-        const currentDiscovered = discoveredInjectsRef.current;
-
-        const timeAfter = currentTime + (option.time_cost_minutes || 0);
-
-        // 1. Apply state_effect — compute new state and resolved inject changes.
-        //    Variable references ($varName) in unlock/lock arrays are resolved
-        //    against nextState (after applying set), so a single decision can
-        //    set a variable and immediately use it to unlock an inject.
-        const effect = option.state_effect || {};
-        const { nextState, toUnlock, toLock } = applyStateEffect(effect, currentState);
-
-        // 2. Persist state variable changes fire-and-forget.
-        if (nextState !== currentState) {
-            persistAttemptState(effect.set || {});
-            setAttemptState(nextState);
-            // Update ref immediately so the decision-queue effect can use it
-            attemptStateRef.current = nextState;
-        }
-
-        // 3. Determine which already-discovered injects changed status due to
-        //    the time advance. Compute before mutating discovered list.
-        const degraded = [];
-        const lost     = [];
-        currentDiscovered.forEach(inj => {
-            const before = getEvidenceStatus(inj, currentTime).status;
-            const after  = getEvidenceStatus(inj, timeAfter).status;
-            if (after === "lost"     && before !== "lost")     lost.push(inj);
-            else if (after === "critical" && before !== "critical") degraded.push(inj);
-        });
-
-        // 4. Apply unlock/lock effects.
-        const newlyDiscovered = [];
-        const alreadyIds = new Set(currentDiscovered.map(i => i.id || i._id));
-
-        toUnlock.forEach(injectId => {
-            const target = allInjects.find(inj =>
-                (inj.id || inj._id) === injectId
             );
-            if (target && !alreadyIds.has(injectId)) {
-                newlyDiscovered.push(target);
-                // Deliver file to VM at current quality (before time advance)
-                const { qualityLabel } = getEvidenceStatus(target, currentTime);
-                onInjectReleased?.({ inject: target, quality: qualityLabel });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                addToast(data.message || "Extraction failed", "error");
+                return;
             }
-        });
 
-        let nextDiscovered = [
-            ...currentDiscovered.filter(inj => !toLock.includes(inj.id || inj._id)),
-            ...newlyDiscovered,
-        ];
+            // Update scenario time
+            setScenarioTime(data.scenario_time);
+            onScenarioTimeChange?.(data.scenario_time);
 
-        setDiscoveredInjects(nextDiscovered);
-        discoveredInjectsRef.current = nextDiscovered;
+            // Apply new inject states from server response
+            setInjectStates((prev) => {
+                const next = { ...prev };
 
-        // 5. Advance scenario time
-        setScenarioTime(timeAfter);
-        scenarioTimeRef.current = timeAfter;
+                // Mark extracted inject
+                next[inject.id] = {
+                    ...next[inject.id],
+                    status:              "extracted",
+                    qualityAtExtraction: data.quality_delivered,
+                    extractionMethod:    action,
+                };
 
-        // 6. Record the decision on the backend (fire-and-forget)
-        fetch(API(`/attempts/${attemptId}/decisions`), {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-                decision_id:          decision.id || decision._id,
-                chosen_option_id:     option.id || option._id,
-                scenario_time_before: currentTime,
-                time_cost_minutes:    option.time_cost_minutes,
-            }),
-        }).catch(err => console.warn("[NarrativeEngine] Failed to record decision:", err));
+                // Mark newly discovered injects
+                (data.newly_discovered || []).forEach((newId) => {
+                    if (next[newId]) {
+                        next[newId] = {
+                            ...next[newId],
+                            status:       "discovered",
+                            discoveredAt: data.scenario_time,
+                        };
+                    }
+                });
 
-        // 7. Dequeue this decision and clear choosing state
-        setDecisionQueue(prev => prev.filter(d => (d.id || d._id) !== (decision.id || decision._id)));
-        setChoosing(false);
+                return next;
+            });
 
-        // 8. Show feedback
-        setFeedback({
-            outcomeText: option.outcome_text,
-            unlocked: newlyDiscovered,
-            degraded,
-            lost,
-        });
-    }, [allInjects, attemptId, token, onInjectReleased, persistAttemptState]);
+            // Toast feedback
+            const qualityLabel = data.quality_delivered === "high" ? "high quality" : "low quality";
+            addToast(
+                `${inject.title} extracted at ${qualityLabel} (${action === "full" ? "proper" : "live"} acquisition)`,
+                data.quality_delivered === "high" ? "success" : "warn"
+            );
 
-    // ── Extract an inject — freezes its quality at current scenario time ──────
-    const handleExtract = useCallback((inject) => {
-        const { qualityLabel } = getEvidenceStatus(inject, scenarioTimeRef.current);
-        const injectId = inject.id || inject._id;
-        setExtracting(injectId);
+            // Announce newly discovered items
+            (data.newly_discovered || []).forEach((newId) => {
+                const found = phaseInjects.find((i) => i.id === newId);
+                if (found) addToast(`New evidence discovered: ${found.title}`, "info");
+            });
 
-        fetch(API(`/attempts/${attemptId}/injects/${injectId}/extract`), {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ quality: qualityLabel, scenario_time: scenarioTimeRef.current }),
-        }).catch(err => console.warn("[NarrativeEngine] Failed to record extraction:", err));
+            if (data.budget_exhausted) {
+                addToast("Scenario time budget exhausted — no more actions this phase", "error");
+            }
 
-        // Deliver correct quality file to VM
-        onInjectReleased?.({ inject, quality: qualityLabel });
+        } catch (err) {
+            console.error("NarrativeEngine extract error:", err);
+            addToast("Network error — extraction failed", "error");
+        } finally {
+            setExtracting(false);
+        }
+    }, [extracting, attemptId, token, scenarioTime, phaseInjects, addToast, onScenarioTimeChange]);
 
-        setDiscoveredInjects(prev => {
-            const next = prev.filter(i => (i.id || i._id) !== injectId);
-            discoveredInjectsRef.current = next;
-            return next;
-        });
-        setExtractedInjects(prev => [...prev, { inject, qualityAtExtraction: qualityLabel }]);
-        setExtracting(null);
-    }, [attemptId, token, onInjectReleased]);
-
-    // The decision currently being presented is the head of the queue,
-    // but only if feedback is not showing (feedback must be dismissed first)
-    const pendingDecision = !feedback && decisionQueue.length > 0 ? decisionQueue[0] : null;
+    // ── Categorise injects for render ─────────────────────────────────────────
+    const discovered  = phaseInjects.filter((i) => injectStates[i.id]?.status === "discovered");
+    const extracted   = phaseInjects.filter((i) => injectStates[i.id]?.status === "extracted");
+    const undiscCount = phaseInjects.filter((i) => injectStates[i.id]?.status === "undiscovered").length;
 
     return (
-        <>
-            <div className="ne-panels">
-                {/* Left: discovered */}
-                <div className="ne-panel ne-panel--discovered">
-                    <div className="ne-panel__header">
-                        <span className="ne-panel__title">// DISCOVERED EVIDENCE</span>
-                        <span className="ne-panel__count">{discoveredInjects.length}</span>
+        <div className="nar-engine">
+            <Toast messages={toasts} onDismiss={dismissToast} />
+
+            {/* ── Token bar ─────────────────────────────────────────────── */}
+            <TokenBar scenarioTime={scenarioTime} timeBudget={timeBudget} />
+
+            {/* ── Two-column evidence layout ────────────────────────────── */}
+            <div className="nar-columns">
+                {/* Left — undiscovered count + discovered actionable cards */}
+                <div className="nar-col nar-col--left">
+                    <div className="nar-col__header">
+                        <span className="nar-col__slash">// </span>
+                        EVIDENCE FEED
+                        {undiscCount > 0 && (
+                            <span className="nar-col__pending">
+                                {undiscCount} PENDING DISCOVERY
+                            </span>
+                        )}
                     </div>
-                    <div className="ne-panel__body">
-                        {discoveredInjects.length === 0
-                            ? <div className="ne-panel__empty">Evidence appears here when discovered…</div>
-                            : discoveredInjects.map(inj => (
+
+                    {discovered.length === 0 ? (
+                        <div className="nar-col__empty">
+                            <div className="nar-col__empty-icon">◈</div>
+                            <div>AWAITING EVIDENCE</div>
+                            <div className="nar-col__empty-sub">
+                                {undiscCount > 0
+                                    ? "Extract existing evidence to unlock more"
+                                    : "No evidence available this phase"}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="nar-col__list">
+                            {discovered.map((inj) => (
                                 <DiscoveredCard
-                                    key={inj.id || inj._id}
+                                    key={inj.id}
                                     inject={inj}
+                                    discoveredAt={injectStates[inj.id]?.discoveredAt ?? 0}
                                     scenarioTime={scenarioTime}
+                                    timeBudget={timeBudget}
                                     onExtract={handleExtract}
-                                    extracting={extracting === (inj.id || inj._id)}
+                                    extracting={extracting}
                                 />
-                            ))
-                        }
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* Right: extracted */}
-                <div className="ne-panel ne-panel--extracted">
-                    <div className="ne-panel__header">
-                        <span className="ne-panel__title">// EXTRACTED EVIDENCE</span>
-                        <span className="ne-panel__count">{extractedInjects.length}</span>
+                {/* Right — extracted (read-only) */}
+                <div className="nar-col nar-col--right">
+                    <div className="nar-col__header">
+                        <span className="nar-col__slash">// </span>
+                        EXTRACTED ({extracted.length})
                     </div>
-                    <div className="ne-panel__body">
-                        {extractedInjects.length === 0
-                            ? <div className="ne-panel__empty">Extracted evidence appears here.</div>
-                            : extractedInjects.map(({ inject, qualityAtExtraction }) => (
-                                <ExtractedCard
-                                    key={inject.id || inject._id}
-                                    inject={inject}
-                                    qualityAtExtraction={qualityAtExtraction}
-                                />
-                            ))
-                        }
-                    </div>
+
+                    {extracted.length === 0 ? (
+                        <div className="nar-col__empty">
+                            <div className="nar-col__empty-icon">◇</div>
+                            <div>NO EXTRACTIONS YET</div>
+                            <div className="nar-col__empty-sub">
+                                Extracted evidence will appear here and in the VM
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="nar-col__list">
+                            {extracted.map((inj) => {
+                                const state = injectStates[inj.id];
+                                return (
+                                    <ExtractedCard
+                                        key={inj.id}
+                                        inject={inj}
+                                        qualityAtExtraction={state?.qualityAtExtraction}
+                                        extractionMethod={state?.extractionMethod}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
-
-            {pendingDecision && (
-                <DecisionModal
-                    decision={pendingDecision}
-                    onChoose={handleChoose}
-                    choosing={choosing}
-                />
-            )}
-
-            {feedback && (
-                <FeedbackCard
-                    feedback={feedback}
-                    onDismiss={() => {
-                        setFeedback(null);
-                        // After dismissing feedback, the next queued decision
-                        // (if any) will automatically appear via pendingDecision
-                    }}
-                />
-            )}
-        </>
+        </div>
     );
 }

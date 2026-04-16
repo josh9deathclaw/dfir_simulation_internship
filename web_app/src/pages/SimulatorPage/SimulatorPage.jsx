@@ -175,7 +175,7 @@ function BottomBar({ phase, phaseIndex, totalPhases, timeLeft, isTimerFrozen,
             </div>
             <div className="sim-bottom__right">
                 {narrativeScenarioTime !== undefined && (
-                    <span className="sim-bottom__scenario-time">⏱ {narrativeScenarioTime} min</span>
+                    <span className="sim-bottom__scenario-time">⏱ {narrativeScenarioTime}u</span>
                 )}
                 <span className={`sim-bottom__timer${timerCritical ? " sim-bottom__timer--critical" : ""}`}>
                     {isTimerFrozen ? "⏸ FROZEN" : formatTime(timeLeft)}
@@ -274,7 +274,7 @@ export default function SimulatorPage() {
     const [allPhases,    setAllPhases]    = useState([]);
     const [allInjects,   setAllInjects]   = useState([]);
     const [allQuestions, setAllQuestions] = useState([]);
-    const [allDecisions, setAllDecisions] = useState([]);
+    const [allTriggers,  setAllTriggers]  = useState([]);
     const [scenarioMode, setScenarioMode] = useState("open_ended");
 
     const [attemptId,       setAttemptId]       = useState(null);
@@ -324,7 +324,7 @@ export default function SimulatorPage() {
                 setAllInjects(data.injects);
                 setAllQuestions(data.questions);
                 setAllObjectives(data.objectives || []);
-                setAllDecisions(data.decisions || []);
+                setAllTriggers(data.triggers || []);
 
                 if (data.phases.length > 0) {
                     setTimeLeft(data.phases[0].duration_minutes * 60);
@@ -456,25 +456,6 @@ export default function SimulatorPage() {
         });
     }, [phaseElapsed, currentPhase, releaseSchedule, allInjects, token, attemptId, isNarrative]);
 
-    // ── Narrative: VM file delivery callback from NarrativeEngine ─────────────
-    // NarrativeEngine calls this with { inject, quality: 'High' | 'Low' }.
-    // We select file_path_low_quality when quality is Low (degraded evidence),
-    // falling back to file_path if the low-quality file was not uploaded.
-    const handleNarrativeInjectReleased = useCallback(({ inject, quality }) => {
-        if (!attemptId) return;
-        const useLowQuality = quality === "Low" && inject.file_path_low_quality;
-        const filePath = useLowQuality ? inject.file_path_low_quality : inject.file_path;
-        const fileName = useLowQuality
-            ? (inject.file_name_low_quality || inject.file_path_low_quality?.split('/').pop())
-            : (inject.file_name || inject.file_path?.split('/').pop());
-        if (!filePath || !fileName) return;
-        fetch(API(`/vm/inject/${attemptId}`), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ file_path: filePath, file_name: fileName }),
-        }).catch(err => console.warn('[Narrative inject ERROR]', err));
-    }, [attemptId, token]);
-
     // ── Phase end ──────────────────────────────────────────────────────────────
     useEffect(() => {
         if (timeLeft === 0 && currentPhase) {
@@ -575,6 +556,7 @@ export default function SimulatorPage() {
         const idx = nextPhaseIdx ?? phaseIndex + 1;
         setPhaseIndex(idx);
         setTimeLeft(allPhases[idx].duration_minutes * 60);
+        setNarrativeScenarioTime(0);
         setOverlay(null);
         setNextPhaseIdx(null);
     }, [nextPhaseIdx, phaseIndex, allPhases]);
@@ -622,13 +604,13 @@ export default function SimulatorPage() {
                 {isNarrative ? (
                     // ── Narrative layout — NarrativeEngine owns evidence + decisions
                     <NarrativeEngine
-                        allInjects={allInjects.filter(inj =>
-                            inj.phase_id === currentPhase?.id || inj.phase_id === null
+                        phaseInjects={allInjects.filter(inj =>
+                            inj.phase_id === currentPhase?.id
                         )}
-                        decisions={allDecisions.filter(d => d.phase_id === currentPhase?.id)}
+                        triggers={allTriggers}
+                        timeBudget={currentPhase?.time_budget ?? 30}
                         attemptId={attemptId}
                         token={token}
-                        onInjectReleased={handleNarrativeInjectReleased}
                         onScenarioTimeChange={setNarrativeScenarioTime}
                     />
                 ) : (
