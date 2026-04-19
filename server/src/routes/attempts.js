@@ -13,13 +13,21 @@ router.post('/', authenticateToken, async (req, res) => {
 
     try {
         const existing = await db.query(
-            `SELECT id FROM attempts
-             WHERE student_id = $1 AND scenario_id = $2 AND status = 'active'`,
+            `SELECT id, scenario_time_units, COALESCE(phase_index, 0) AS phase_index
+             FROM attempts
+             WHERE student_id = $1 AND scenario_id = $2 AND status = 'active'
+             LIMIT 1`,
             [userId, scenario_id]
         );
 
         if (existing.rows.length > 0) {
-            return res.json({ attempt_id: existing.rows[0].id, resumed: true });
+            const row = existing.rows[0];
+            return res.json({
+                attempt_id:         row.id,
+                resumed:            true,
+                scenario_time_units: row.scenario_time_units ?? 0,
+                phase_index:        row.phase_index ?? 0,
+            });
         }
 
         const result = await db.query(
@@ -29,7 +37,7 @@ router.post('/', authenticateToken, async (req, res) => {
             [userId, scenario_id]
         );
 
-        res.status(201).json({ attempt_id: result.rows[0].id, resumed: false });
+        res.status(201).json({ attempt_id: result.rows[0].id, resumed: false, scenario_time_units: 0, phase_index: 0 });
 
     } catch (err) {
         console.error('POST /api/attempts error:', err);
@@ -119,18 +127,51 @@ router.post('/:id/injects/:injectId/extract', authenticateToken, async (req, res
         }
         const inject = injectRes.rows[0];
 
-        // ── Load current inject state for this attempt ───────────────────────
+        // ── Load (or auto-seed) current inject state for this attempt ─────────
+        // Insert a 'discovered' row if one doesn't exist yet. Uses an explicit
+        // upsert rather than ON CONFLICT because the unique constraint may not
+        // exist on older DB installs — we SELECT first, INSERT if missing.
+        const existingState = await client.query(
+            `SELECT status, scenario_time_at_discovery
+             FROM attempt_inject_state
+             WHERE attempt_id = $1 AND inject_id = $2`,
+            [attemptId, injectId]
+        );
+
+        console.log(`[extract] attempt=${attemptId} inject=${injectId} action=${action}`);
+        console.log(`[extract] existing state rows: ${existingState.rows.length}`,
+            existingState.rows[0] ? `status=${existingState.rows[0].status}` : '(none)');
+
+        if (existingState.rows.length === 0) {
+            // No row — auto-create as 'discovered' (handles 'always' trigger injects
+            // that were never seeded, and DB installs without the unique constraint)
+            console.log(`[extract] no row found — inserting discovered row`);
+            await client.query(
+                `INSERT INTO attempt_inject_state
+                     (attempt_id, inject_id, status, scenario_time_at_discovery)
+                 VALUES ($1, $2, 'discovered', 0)`,
+                [attemptId, injectId]
+            );
+        }
+
         const stateRes = await client.query(
-            `SELECT status, quality, scenario_time_at_discovery
+            `SELECT status, scenario_time_at_discovery
              FROM attempt_inject_state
              WHERE attempt_id = $1 AND inject_id = $2`,
             [attemptId, injectId]
         );
 
         // ── STEP 1: VALIDATE ─────────────────────────────────────────────────
-        if (stateRes.rows.length === 0 || stateRes.rows[0].status !== 'discovered') {
+        const currentStatus = stateRes.rows[0]?.status;
+        console.log(`[extract] status after upsert: ${currentStatus}`);
+
+        if (!currentStatus || currentStatus !== 'discovered') {
             await client.query('ROLLBACK');
-            return res.status(409).json({ message: 'Evidence is not in discovered state' });
+            console.warn(`[extract] 409 — status is '${currentStatus}', expected 'discovered'`);
+            return res.status(409).json({
+                message: 'Evidence is not in discovered state',
+                current_status: currentStatus || 'not found',
+            });
         }
 
         const discoveredAt = stateRes.rows[0].scenario_time_at_discovery ?? 0;
@@ -321,6 +362,107 @@ router.post('/:id/injects/:injectId/extract', authenticateToken, async (req, res
         res.status(500).json({ message: 'Internal server error' });
     } finally {
         client.release();
+    }
+});
+
+// ── GET /check/:scenarioId — check for existing active attempt ───────────────
+router.get('/check/:scenarioId', authenticateToken, async (req, res) => {
+    const { id: userId } = req.user;
+    try {
+        const { rows } = await db.query(
+            `SELECT id, scenario_time_units, COALESCE(phase_index, 0) AS phase_index, started_at
+             FROM attempts
+             WHERE student_id = $1 AND scenario_id = $2 AND status = 'active'
+             LIMIT 1`,
+            [userId, req.params.scenarioId]
+        );
+        if (rows.length === 0) return res.json({ exists: false });
+        res.json({ exists: true, attempt_id: rows[0].id,
+                   scenario_time_units: rows[0].scenario_time_units ?? 0,
+                   phase_index: rows[0].phase_index ?? 0,
+                   started_at: rows[0].started_at });
+    } catch (err) {
+        console.error('GET /api/attempts/check error:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// ── PATCH /:id/phase — update phase_index as student progresses ─────────────
+router.patch('/:id/phase', authenticateToken, async (req, res) => {
+    const { id: userId } = req.user;
+    const { phase_index } = req.body;
+    if (phase_index == null) return res.status(400).json({ message: 'phase_index required' });
+    try {
+        await db.query(
+            `UPDATE attempts SET phase_index = $1
+             WHERE id = $2 AND student_id = $3 AND status = 'active'`,
+            [phase_index, req.params.id, userId]
+        );
+        res.json({ phase_index });
+    } catch (err) {
+        console.error('PATCH /api/attempts/:id/phase error:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// ── DELETE /:id — abandon attempt (student starting fresh) ───────────────────
+router.delete('/:id', authenticateToken, async (req, res) => {
+    const { id: userId } = req.user;
+    try {
+        await db.query(
+            `UPDATE attempts SET status = 'abandoned', completed_at = NOW()
+             WHERE id = $1 AND student_id = $2 AND status = 'active'`,
+            [req.params.id, userId]
+        );
+        res.json({ message: 'Attempt abandoned' });
+    } catch (err) {
+        console.error('DELETE /api/attempts/:id error:', err);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// ── GET /:id/injects/state — load all inject states for an attempt ────────────
+// Called by NarrativeEngine on mount to rehydrate from DB instead of assuming
+// everything starts fresh (prevents 409s when resuming an active attempt).
+router.get('/:id/injects/state', authenticateToken, async (req, res) => {
+    const { id: userId } = req.user;
+    const attemptId = req.params.id;
+    try {
+        const attemptRes = await db.query(
+            `SELECT id, scenario_time_units FROM attempts
+             WHERE id = $1 AND student_id = $2 AND status = 'active'`,
+            [attemptId, userId]
+        );
+        if (attemptRes.rows.length === 0) {
+            return res.status(404).json({ message: 'Active attempt not found' });
+        }
+        const scenarioTime = attemptRes.rows[0].scenario_time_units ?? 0;
+
+        const { rows } = await db.query(
+            `SELECT ais.inject_id, ais.status,
+                    ais.scenario_time_at_discovery,
+                    ais.quality_at_extraction,
+                    ais.extraction_method
+             FROM attempt_inject_state ais
+             WHERE ais.attempt_id = $1`,
+            [attemptId]
+        );
+
+        // Return as a map: inject_id → state object
+        const stateMap = {};
+        rows.forEach(r => {
+            stateMap[r.inject_id] = {
+                status:              r.status,
+                discoveredAt:        r.scenario_time_at_discovery ?? 0,
+                qualityAtExtraction: r.quality_at_extraction,
+                extractionMethod:    r.extraction_method,
+            };
+        });
+
+        res.json({ scenario_time: scenarioTime, states: stateMap });
+    } catch (err) {
+        console.error('GET /api/attempts/:id/injects/state error:', err);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 

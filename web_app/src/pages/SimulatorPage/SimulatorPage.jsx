@@ -157,29 +157,44 @@ function SideObjectiveRow({ obj, response, onSubmit }) {
 // ─── Bottom Bar ────────────────────────────────────────────────────────────────
 // narrativeScenarioTime: only passed when mode === 'narrative', undefined otherwise
 function BottomBar({ phase, phaseIndex, totalPhases, timeLeft, isTimerFrozen,
-    gatesTotal, gatesDone, onOpenOverview, onOpenBoard, narrativeScenarioTime }) {
+    onOpenOverview, onOpenBoard, narrativeScenarioTime }) {
     const timerCritical = timeLeft < 120 && !isTimerFrozen;
+    const pips = Array.from({ length: totalPhases }, (_, i) => i);
     return (
-        <div className="sim-bottom">
-            <div className="sim-bottom__left">
-                <button className="sim-bottom__btn" onClick={onOpenOverview}>⊞ Overview</button>
-                <button className="sim-bottom__btn" onClick={onOpenBoard}>◈ Board</button>
+        <div className="sim-bottombar">
+            <div className="sim-bottombar__left">
+                <button className="sim-bar-icon" onClick={onOpenOverview}>
+                    <span className="sim-bar-icon__symbol">⊞</span>
+                    <span className="sim-bar-icon__label">OVERVIEW</span>
+                </button>
+                <button className="sim-bar-icon" onClick={onOpenBoard}>
+                    <span className="sim-bar-icon__symbol">◈</span>
+                    <span className="sim-bar-icon__label">BOARD</span>
+                </button>
             </div>
-            <div className="sim-bottom__center">
+            <div className="sim-bottombar__centre">
+                <div className="sim-bottombar__phase-track">
+                    {pips.map(i => (
+                        <div key={i} className={
+                            `sim-phase-pip${i < phaseIndex ? " sim-phase-pip--done" : ""}${i === phaseIndex ? " sim-phase-pip--active" : ""}`
+                        } />
+                    ))}
+                </div>
                 {phase && (
-                    <>
-                        <span className="sim-bottom__phase-label">PHASE {phaseIndex + 1}/{totalPhases}</span>
-                        <span className="sim-bottom__phase-name">{phase.title?.toUpperCase()}</span>
-                    </>
+                    <span className="sim-bottombar__phase-label">
+                        <span className="sim-bottombar__phase-slash">// </span>
+                        PHASE {phaseIndex + 1} — {phase.title?.toUpperCase()}
+                    </span>
+                )}
+                {narrativeScenarioTime !== undefined && (
+                    <span className="sim-bottombar__gates">⏱ {narrativeScenarioTime}u</span>
                 )}
             </div>
-            <div className="sim-bottom__right">
-                {narrativeScenarioTime !== undefined && (
-                    <span className="sim-bottom__scenario-time">⏱ {narrativeScenarioTime}u</span>
-                )}
-                <span className={`sim-bottom__timer${timerCritical ? " sim-bottom__timer--critical" : ""}`}>
-                    {isTimerFrozen ? "⏸ FROZEN" : formatTime(timeLeft)}
+            <div className={`sim-bottombar__timer${timerCritical ? " sim-bottombar__timer--critical" : ""}${isTimerFrozen ? " sim-bottombar__timer--frozen" : ""}`}>
+                <span className="sim-bottombar__timer-digits">
+                    {isTimerFrozen ? "⏸" : formatTime(timeLeft)}
                 </span>
+                {isTimerFrozen && <span className="sim-bottombar__timer-frozen-label">FROZEN</span>}
             </div>
         </div>
     );
@@ -262,6 +277,51 @@ function PhaseTransitionOverlay({ phase, phaseIndex, onDone }) {
     );
 }
 
+// ─── Briefing Overlay ─────────────────────────────────────────────────────────
+function BriefingOverlay({ scenario, phase, phaseIndex, isResume, isPhaseTransition, onStart }) {
+    const isFirst = phaseIndex === 0;
+    return (
+        <div className="sim-overlay sim-overlay--briefing">
+            <div className="sim-modal sim-modal--briefing">
+                <div className="sim-modal__header">
+                    <span className="sim-modal__prompt">
+                        {isPhaseTransition
+                            ? `// PHASE ${phaseIndex + 1} — BRIEFING`
+                            : isResume
+                                ? "// RESUMING OPERATION"
+                                : "// OPERATION BRIEFING"}
+                    </span>
+                </div>
+                <div className="sim-modal__body">
+                    {!isPhaseTransition && (
+                        <>
+                            <div className="sim-briefing__scenario-title">{scenario?.title}</div>
+                            {scenario?.description && (
+                                <p className="sim-briefing__desc">{scenario.description}</p>
+                            )}
+                            <div className="sim-briefing__divider" />
+                        </>
+                    )}
+                    <div className="sim-briefing__phase-label">
+                        Phase {phaseIndex + 1}{phase?.title ? ` — ${phase.title}` : ""}
+                    </div>
+                    {phase?.description && (
+                        <p className="sim-briefing__phase-desc">{phase.description}</p>
+                    )}
+                    {isResume && (
+                        <div className="sim-briefing__resume-note">
+                            ⏱ Resuming from where you left off.
+                        </div>
+                    )}
+                    <button className="sim-proceed-btn sim-proceed-btn--ready sim-briefing__btn" onClick={onStart}>
+                        {isPhaseTransition ? "[ BEGIN PHASE ]" : isResume ? "[ RESUME OPERATION ]" : "[ BEGIN OPERATION ]"}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function SimulatorPage() {
     const { scenarioId } = useParams();
@@ -291,6 +351,7 @@ export default function SimulatorPage() {
     const [objCollapsed,    setObjCollapsed]     = useState(false);
     const [overlay,         setOverlay]          = useState(null);
     const [nextPhaseIdx,    setNextPhaseIdx]     = useState(null);
+    const [resumed,         setResumed]          = useState(false);
     // Narrative only: scenario time bubbled up from NarrativeEngine for BottomBar
     const [narrativeScenarioTime, setNarrativeScenarioTime] = useState(0);
 
@@ -326,6 +387,7 @@ export default function SimulatorPage() {
                 setAllObjectives(data.objectives || []);
                 setAllTriggers(data.triggers || []);
 
+                // timeLeft will be set after attempt creation (may be restored from resume)
                 if (data.phases.length > 0) {
                     setTimeLeft(data.phases[0].duration_minutes * 60);
                 }
@@ -336,8 +398,21 @@ export default function SimulatorPage() {
                     body: JSON.stringify({ scenario_id: scenarioId }),
                 });
                 if (!attemptRes.ok) throw new Error("Failed to create attempt");
-                const { attempt_id } = await attemptRes.json();
-                setAttemptId(attempt_id);
+                const attemptData = await attemptRes.json();
+                setAttemptId(attemptData.attempt_id);
+
+                if (attemptData.resumed) {
+                    // Restore phase index from DB
+                    const savedPhase = attemptData.phase_index ?? 0;
+                    setPhaseIndex(savedPhase);
+                    if (data.phases[savedPhase]) {
+                        setTimeLeft(data.phases[savedPhase].duration_minutes * 60);
+                    }
+                    setResumed(true);
+                }
+
+                // Show scenario briefing overlay on first load
+                setOverlay("briefing");
 
             } catch (err) {
                 console.error("SimulatorPage load error:", err);
@@ -456,6 +531,25 @@ export default function SimulatorPage() {
         });
     }, [phaseElapsed, currentPhase, releaseSchedule, allInjects, token, attemptId, isNarrative]);
 
+    // ── Narrative: VM file delivery callback from NarrativeEngine ─────────────
+    // NarrativeEngine calls this with { inject, quality: 'High' | 'Low' }.
+    // We select file_path_low_quality when quality is Low (degraded evidence),
+    // falling back to file_path if the low-quality file was not uploaded.
+    const handleNarrativeInjectReleased = useCallback(({ inject, quality }) => {
+        if (!attemptId) return;
+        const useLowQuality = quality === "Low" && inject.file_path_low_quality;
+        const filePath = useLowQuality ? inject.file_path_low_quality : inject.file_path;
+        const fileName = useLowQuality
+            ? (inject.file_name_low_quality || inject.file_path_low_quality?.split('/').pop())
+            : (inject.file_name || inject.file_path?.split('/').pop());
+        if (!filePath || !fileName) return;
+        fetch(API(`/vm/inject/${attemptId}`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ file_path: filePath, file_name: fileName }),
+        }).catch(err => console.warn('[Narrative inject ERROR]', err));
+    }, [attemptId, token]);
+
     // ── Phase end ──────────────────────────────────────────────────────────────
     useEffect(() => {
         if (timeLeft === 0 && currentPhase) {
@@ -556,10 +650,18 @@ export default function SimulatorPage() {
         const idx = nextPhaseIdx ?? phaseIndex + 1;
         setPhaseIndex(idx);
         setTimeLeft(allPhases[idx].duration_minutes * 60);
-        setNarrativeScenarioTime(0);
-        setOverlay(null);
         setNextPhaseIdx(null);
-    }, [nextPhaseIdx, phaseIndex, allPhases]);
+        // Show phase briefing before resuming
+        setOverlay("phase-briefing");
+        // Persist phase_index so resume works correctly
+        if (attemptId) {
+            fetch(API(`/attempts/${attemptId}/phase`), {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ phase_index: idx }),
+            }).catch(() => {});
+        }
+    }, [nextPhaseIdx, phaseIndex, allPhases, attemptId, token]);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === "p" || e.key === "P") handlePhaseEnd(); };
@@ -599,19 +701,20 @@ export default function SimulatorPage() {
             <div className="sim-vignette" />
 
             <div className="sim-body">
-                <VMPanel attemptId={attemptId} />
+                {/* VMPanel only in open-ended mode */}
+                {!isNarrative && <VMPanel attemptId={attemptId} />}
 
                 {isNarrative ? (
-                    // ── Narrative layout — NarrativeEngine owns evidence + decisions
                     <NarrativeEngine
-                        phaseInjects={allInjects.filter(inj =>
-                            inj.phase_id === currentPhase?.id
-                        )}
+                        phaseInjects={allInjects.filter(inj => inj.phase_id === currentPhase?.id)}
                         triggers={allTriggers}
                         timeBudget={currentPhase?.time_budget ?? 30}
                         attemptId={attemptId}
                         token={token}
                         onScenarioTimeChange={setNarrativeScenarioTime}
+                        objectives={allObjectives}
+                        objResponses={objResponses}
+                        onSubmitObjective={handleSubmitObjective}
                     />
                 ) : (
                     // ── Open-ended layout — original feed + objectives, unchanged
@@ -657,8 +760,6 @@ export default function SimulatorPage() {
                 totalPhases={allPhases.length}
                 timeLeft={timeLeft}
                 isTimerFrozen={isTimerFrozen}
-                gatesTotal={gatesTotal}
-                gatesDone={gatesDone}
                 onOpenOverview={() => setOverlay("overview")}
                 onOpenBoard={() => setOverlay("board")}
                 narrativeScenarioTime={isNarrative ? narrativeScenarioTime : undefined}
@@ -683,6 +784,26 @@ export default function SimulatorPage() {
                     isEndOfScenario={overlay === "questions-end"}
                     submitting={submitting}
                     onSubmit={(answers) => handleSubmitAnswers(answers, overlay === "questions-end")} />
+            )}
+            {overlay === "briefing" && (
+                <BriefingOverlay
+                    scenario={scenarioData}
+                    phase={currentPhase}
+                    phaseIndex={phaseIndex}
+                    isResume={resumed}
+                    isPhaseTransition={false}
+                    onStart={() => setOverlay(null)}
+                />
+            )}
+            {overlay === "phase-briefing" && (
+                <BriefingOverlay
+                    scenario={scenarioData}
+                    phase={allPhases[phaseIndex]}
+                    phaseIndex={phaseIndex}
+                    isResume={false}
+                    isPhaseTransition={true}
+                    onStart={() => setOverlay(null)}
+                />
             )}
             {overlay === "transition" && (
                 <PhaseTransitionOverlay

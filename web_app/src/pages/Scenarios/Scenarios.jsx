@@ -293,15 +293,32 @@ function StudentsTab({ scenarioId, accentColor }) {
     );
 }
 
-// ─── ScenarioModal (unchanged) ────────────────────────────────────────────────
+// ─── ScenarioModal ────────────────────────────────────────────────────────────
 function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishToggle, navigate }) {
-    const [activeTab,  setActiveTab]  = useState("overview");
-    const [publishing, setPublishing] = useState(false);
+    const [activeTab,    setActiveTab]    = useState("overview");
+    const [publishing,   setPublishing]   = useState(false);
+    const [existingAttempt, setExistingAttempt] = useState(null); // { attempt_id, phase_index, started_at }
+    const [checkingAttempt, setCheckingAttempt] = useState(userRole === "student" && scenario.is_published);
+    const [abandoning,   setAbandoning]   = useState(false);
     const token     = getToken();
     const isOwner   = scenario.created_by === userId;
     const diff      = DIFFICULTY_CONFIG[scenario.difficulty];
     const accent    = scenario.accentColor;
     const time      = formatTime(scenario.estimated_time_minutes);
+
+    // Check for existing active attempt when modal opens (students only)
+    useEffect(() => {
+        if (userRole !== "student" || !scenario.is_published) return;
+        fetch(API(`/attempts/check/${scenario.id}`), {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.exists) setExistingAttempt(data);
+            })
+            .catch(() => {})
+            .finally(() => setCheckingAttempt(false));
+    }, [scenario.id, userRole, scenario.is_published, token]);
 
     const handlePublishToggle = async () => {
         setPublishing(true);
@@ -317,6 +334,23 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
         } catch {} finally { setPublishing(false); }
     };
 
+    const handleResume = () => {
+        navigate(`/simulatorpage/${scenario.id}`);
+    };
+
+    const handleStartNew = async () => {
+        if (!existingAttempt) { navigate(`/simulatorpage/${scenario.id}`); return; }
+        setAbandoning(true);
+        try {
+            await fetch(API(`/attempts/${existingAttempt.attempt_id}`), {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` },
+            });
+        } catch {}
+        setAbandoning(false);
+        navigate(`/simulatorpage/${scenario.id}`);
+    };
+
     const tabs = userRole === "teacher" && isOwner ? ["overview", "students", "analytics"] : ["overview"];
 
     useEffect(() => {
@@ -324,6 +358,11 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [onClose]);
+
+    // Format started_at for display
+    const startedStr = existingAttempt?.started_at
+        ? new Date(existingAttempt.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+        : null;
 
     return (
         <div className="sc-modal-backdrop" onClick={onClose}>
@@ -366,11 +405,36 @@ function ScenarioModal({ scenario, userId, userRole, onClose, onEdit, onPublishT
                             {scenario.description && <p className="sc-modal__desc">{scenario.description}</p>}
                             <div className="sc-modal__actions">
                                 {userRole === "student" && scenario.is_published && (
-                                    <button className="sc-btn sc-btn--primary"
-                                        style={{ background: accent, boxShadow: `0 4px 20px ${accent}44` }}
-                                        onClick={() => navigate(`/simulatorpage/${scenario.id}`)}>
-                                        Start Scenario →
-                                    </button>
+                                    checkingAttempt ? (
+                                        <div className="sc-attempt-checking">Checking progress…</div>
+                                    ) : existingAttempt ? (
+                                        <div className="sc-attempt-resume">
+                                            <div className="sc-attempt-resume__info">
+                                                <span className="sc-attempt-resume__icon">⏱</span>
+                                                <div>
+                                                    <div className="sc-attempt-resume__label">In progress</div>
+                                                    {startedStr && <div className="sc-attempt-resume__date">Started {startedStr}</div>}
+                                                </div>
+                                            </div>
+                                            <div className="sc-attempt-resume__btns">
+                                                <button className="sc-btn sc-btn--primary"
+                                                    style={{ background: accent, boxShadow: `0 4px 20px ${accent}44` }}
+                                                    onClick={handleResume}>
+                                                    Resume Scenario →
+                                                </button>
+                                                <button className="sc-btn sc-btn--ghost sc-btn--danger"
+                                                    onClick={handleStartNew} disabled={abandoning}>
+                                                    {abandoning ? "Starting…" : "Start New Attempt"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button className="sc-btn sc-btn--primary"
+                                            style={{ background: accent, boxShadow: `0 4px 20px ${accent}44` }}
+                                            onClick={() => navigate(`/simulatorpage/${scenario.id}`)}>
+                                            Start Scenario →
+                                        </button>
+                                    )
                                 )}
                                 {userRole === "teacher" && isOwner && (
                                     <>
