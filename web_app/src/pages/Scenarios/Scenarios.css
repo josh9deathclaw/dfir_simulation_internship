@@ -334,3 +334,153 @@
     .sc-modal__body { padding: 18px 20px 24px; }
 }
 
+/* --- Class Selector Reference --- */
+.sc-class-select {
+    background: transparent;
+    border: none;
+    border-radius: 7px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-ui-mono);
+    padding: 5px 12px;
+    text-transform: capitalize;
+    transition: all 0.18s;
+}
+
+.sc-class-select:hover { color: var(--color-text-primary); }
+
+/* Resume attempt block */
+.sc-attempt-resume {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--color-cyan-border);
+    border-radius: 6px;
+    background: var(--color-surface-raised);
+}
+ 
+.sc-attempt-resume__info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+ 
+.sc-attempt-resume__icon {
+    font-size: 20px;
+    opacity: 0.7;
+}
+ 
+.sc-attempt-resume__label {
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+ 
+.sc-attempt-resume__date {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 2px;
+}
+ 
+.sc-attempt-resume__btns {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+ 
+/* Danger ghost button — "Start New Attempt" */
+.sc-btn--danger {
+    border-color: var(--color-red-dim) !important;
+    color: var(--color-red) !important;
+    font-size: 12px;
+}
+.sc-btn--danger:hover {
+    background: var(--color-red-subtle) !important;
+    border-color: var(--color-red) !important;
+}
+ 
+/* Checking state */
+.sc-attempt-checking {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    padding: 8px 0;
+}
+ 
+ 
+/* ── SimulatorPage.css patch — add these to your existing SimulatorPage.css ── */
+ 
+/* Briefing overlay — uses existing sim-modal + sim-overlay structure */
+.sim-overlay--briefing {
+    position: fixed;
+    inset: 0;
+    background: var(--color-backdrop);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 150;
+    backdrop-filter: blur(4px);
+    animation: fade-in 0.3s ease;
+}
+ 
+.sim-modal--briefing {
+    width: 580px;
+    max-width: 90vw;
+}
+ 
+.sim-briefing__scenario-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-bright);
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+}
+ 
+.sim-briefing__desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.8;
+    margin: 0 0 4px;
+}
+ 
+.sim-briefing__divider {
+    height: 1px;
+    background: var(--color-cyan-border2);
+    margin: 16px 0;
+}
+ 
+.sim-briefing__phase-label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--color-cyan);
+    margin-bottom: 10px;
+}
+ 
+.sim-briefing__phase-desc {
+    font-size: 13px;
+    color: var(--color-text-primary);
+    line-height: 1.8;
+    margin: 0 0 20px;
+}
+ 
+.sim-briefing__resume-note {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-cyan-dim);
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-cyan-border2);
+    background: var(--color-cyan-subtle);
+}
+ 
+.sim-briefing__btn {
+    margin-top: 8px;
+}
+ 

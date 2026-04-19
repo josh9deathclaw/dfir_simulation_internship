@@ -48,7 +48,7 @@ export default function FileUploadZone({ inject, onUpdate }) {
             const formData = new FormData();
             formData.append("file", file);
 
-            const res = await fetch(`${API}/uploads`, {
+            const res = await fetch(API("/uploads"), {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
